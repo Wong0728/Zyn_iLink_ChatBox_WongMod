@@ -125,9 +125,12 @@ function Install-FromSource {
 function Write-Shim {
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
     $cmdPath = Join-Path $BinDir 'iLinkWM.cmd'
+    # 【重要】cmd.exe 激活 65001 代码页后无法可靠解析含多字节字符的批处理：
+    # 行定位按字符数而非字节数计算，会在文件中错位落点，把行片段当命令执行
+    # （如 '-service' 不是内部或外部命令）。因此 .cmd 本体必须纯 ASCII，
+    # 中文帮助放独立 UTF-8 文本文件由 type 输出（type 输出不经过解析器）。
     $shim = @'
 @echo off
-chcp 65001 >nul
 setlocal EnableExtensions
 set "APP_ROOT=%~dp0.."
 set "BIN=%APP_ROOT%\ilink-wm1.exe"
@@ -146,8 +149,8 @@ goto :run
 
 :run
 if not exist "%BIN%" (
-    echo [iLinkWM] 未找到 ilink-wm1.exe，请重新安装：
-    echo   irm RAWBASE/deploy/windows/install.ps1 ^| iex
+    echo [iLinkWM] ilink-wm1.exe not found. Please reinstall:
+    echo   powershell -NoProfile -ExecutionPolicy Bypass -Command "irm RAWBASE/deploy/windows/install.ps1 | iex"
     exit /b 1
 )
 cd /d "%APP_ROOT%"
@@ -156,14 +159,14 @@ if "%ILINK_DATA_DIR%"=="" set "ILINK_DATA_DIR=%APP_ROOT%\data"
 exit /b %errorlevel%
 
 :update
-echo [iLinkWM] 正在检查并安装最新版本...
+echo [iLinkWM] Checking and installing the latest version...
 powershell -NoProfile -NoLogo -ExecutionPolicy Bypass -Command "irm RAWBASE/deploy/windows/install.ps1 | iex"
 exit /b %errorlevel%
 
 :instsvc
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [iLinkWM] 注册 Windows 服务需要管理员权限，正在请求提权...
+    echo [iLinkWM] Registering the Windows service requires admin. Elevating...
     powershell -NoProfile -NoLogo -Command "Start-Process -Verb RunAs -FilePath '%APP_ROOT%\install-service.bat'"
     exit /b 0
 )
@@ -173,7 +176,7 @@ exit /b %errorlevel%
 :uninstsvc
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [iLinkWM] 卸载服务需要管理员权限，正在请求提权...
+    echo [iLinkWM] Removing the Windows service requires admin. Elevating...
     powershell -NoProfile -NoLogo -Command "Start-Process -Verb RunAs -FilePath 'cmd.exe' -ArgumentList '/c \"APPROOTRELSLASH\nssm.exe\" stop ilink-wm1 && \"APPROOTRELSLASH\nssm.exe\" remove ilink-wm1 confirm'"
     exit /b 0
 )
@@ -181,14 +184,14 @@ if exist "%APP_ROOT%\bin\nssm.exe" (
     "%APP_ROOT%\bin\nssm.exe" stop ilink-wm1
     "%APP_ROOT%\bin\nssm.exe" remove ilink-wm1 confirm
 ) else (
-    echo [iLinkWM] 未找到 bin\nssm.exe，请手动执行：nssm stop ilink-wm1 ^&^& nssm remove ilink-wm1 confirm
+    echo [iLinkWM] bin\nssm.exe not found. Run manually: nssm stop ilink-wm1 ^&^& nssm remove ilink-wm1 confirm
 )
 exit /b 0
 
 :service
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [iLinkWM] 服务管理需要管理员权限。用法：sc query ilink-wm1 / net stop ilink-wm1 / net start ilink-wm1
+    echo [iLinkWM] Service control requires admin. Usage: sc query ilink-wm1 / net stop ilink-wm1 / net start ilink-wm1
     exit /b 1
 )
 if /i "%~2"=="start" ( net start ilink-wm1 & exit /b 0 )
@@ -200,12 +203,12 @@ exit /b 0
 set "MODE=%~2"
 set "CONFIRM=N"
 if /i "%MODE%"=="--keep-data" (
-    set /p CONFIRM=卸载 iLinkWM？（数据目录将保留；输入 Y 确认）: 
+    set /p CONFIRM=Uninstall iLinkWM but KEEP the data directory? [Y/N]: 
 ) else (
-    set /p CONFIRM=卸载 iLinkWM 并删除程序与全部数据？输入 Y 确认（保留数据请用 --keep-data）: 
+    set /p CONFIRM=Uninstall iLinkWM and DELETE program + ALL data? [Y/N] ^(--keep-data keeps data^): 
 )
-if /i not "%CONFIRM%"=="Y" ( echo [iLinkWM] 已取消。 & exit /b 0 )
-echo [iLinkWM] 正在卸载...
+if /i not "%CONFIRM%"=="Y" ( echo [iLinkWM] Cancelled. & exit /b 0 )
+echo [iLinkWM] Uninstalling...
 if exist "%APP_ROOT%\bin\nssm.exe" (
     "%APP_ROOT%\bin\nssm.exe" stop ilink-wm1 >nul 2>&1
     "%APP_ROOT%\bin\nssm.exe" remove ilink-wm1 confirm >nul 2>&1
@@ -213,29 +216,22 @@ if exist "%APP_ROOT%\bin\nssm.exe" (
 powershell -NoProfile -NoLogo -Command "$b='BINDIR'; $p=[Environment]::GetEnvironmentVariable('Path','User'); $new=($p -split ';' | Where-Object { $_ -and $_ -ne $b }) -join ';'; [Environment]::SetEnvironmentVariable('Path',$new,'User')"
 if /i "%MODE%"=="--keep-data" (
     powershell -NoProfile -NoLogo -Command "Remove-Item -Recurse -Force 'INSTALLROOT\web','INSTALLROOT\ilink-wm1.exe','INSTALLROOT\bin','INSTALLROOT\logs' -ErrorAction SilentlyContinue"
-    echo [iLinkWM] 已卸载（数据目录保留在 DATADIR，需要时手动删除）。
+    echo [iLinkWM] Uninstalled. Data directory kept at: DATADIR
 ) else (
-    echo [iLinkWM] 已卸载（程序与数据目录 DATADIR 将在 2 秒后全部删除）。
+    echo [iLinkWM] Uninstalled. Program and data at DATADIR will be deleted in 2 seconds.
     > "%TEMP%\ilinkwm_uninstall.cmd" echo @timeout /t 2 /nobreak ^>nul
     >>"%TEMP%\ilinkwm_uninstall.cmd" echo @rd /s /q "%APP_ROOT%"
     >>"%TEMP%\ilinkwm_uninstall.cmd" echo @del "%%~f0"
     start "" /min "%TEMP%\ilinkwm_uninstall.cmd"
 )
-echo [iLinkWM] 请关闭并重开终端使 PATH 变更生效。
+echo [iLinkWM] Please close and reopen your terminal to refresh PATH.
 exit /b 0
 
 :help
-echo iLinkWM - Zyn iLink ChatBox WongMod 统一命令
-echo.
-echo   iLinkWM                     启动程序（首次运行进入初始化向导）
-echo   iLinkWM help                显示本帮助（-h / --help 同效）
-echo   iLinkWM install-service     注册 Windows 服务（NSSM，需管理员）
-echo   iLinkWM uninstall-service   移除 Windows 服务（需管理员）
-echo   iLinkWM service start^|stop  启停服务（需管理员）；其余参数查询状态
-echo   iLinkWM update              更新到最新版本
-echo   iLinkWM uninstall [--keep-data] 卸载；默认删除程序与全部数据，--keep-data 保留数据
-echo   iLinkWM admin ...           其余参数原样传给 ilink-wm1
-echo   ilink-wm1 ...               二进制直通命令（同在 PATH）：ilink-wm1 --version / admin ...
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "OLDCP=%%c"
+chcp 65001 >nul
+type "%~dp0iLinkWM-help.txt"
+chcp %OLDCP% >nul
 exit /b 0
 '@
     # 展开真实路径/URL 占位符（避免正则元字符，用 .Replace）
@@ -245,20 +241,40 @@ exit /b 0
     $shim = $shim.Replace('DATADIR', $DataDir)
     $shim = $shim.Replace('APPROOTRELSLASH', ($InstallRoot + '\bin'))
     # 行尾强制 CRLF：经 raw.githubusercontent 下载的本脚本是 LF（git 归一化），
-    # here-string 会继承 LF；cmd.exe 解析 LF 行尾的批处理不可靠，必须转换。
-    # UTF-8 无 BOM：cmd.exe 逐行解析，首行 chcp 65001 后中文正常。
+    # here-string 会继承 LF；cmd 解析 LF 行尾的批处理不可靠，必须转换。
+    # 纯 ASCII 编码落盘：任何控制台代码页下解析都安全。
     $shim = $shim -replace "`r?`n", "`r`n"
-    [IO.File]::WriteAllText($cmdPath, $shim, (New-Object System.Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($cmdPath, $shim, [Text.Encoding]::ASCII)
+
+    # 中文帮助文本（UTF-8 无 BOM）：仅由 :help 分支 chcp 65001 后 type 输出，
+    # 内容不经过 cmd 解析器，无行错位风险。
+    $helpPath = Join-Path $BinDir 'iLinkWM-help.txt'
+    $helpText = @'
+iLinkWM - Zyn iLink ChatBox WongMod 统一命令
+
+  iLinkWM                     启动程序（首次运行进入初始化向导）
+  iLinkWM help                显示本帮助（-h / --help 同效）
+  iLinkWM install-service     注册 Windows 服务（NSSM，需管理员）
+  iLinkWM uninstall-service   移除 Windows 服务（需管理员）
+  iLinkWM service start|stop  启停服务（需管理员）；其余参数查询状态
+  iLinkWM update              更新到最新版本
+  iLinkWM uninstall [--keep-data] 卸载；默认删除程序与全部数据，--keep-data 保留数据
+  iLinkWM admin ...           其余参数原样传给 ilink-wm1
+  ilink-wm1 ...               二进制直通命令（同在 PATH）：ilink-wm1 --version / admin ...
+
+安装目录与数据目录默认位于 %LOCALAPPDATA%\Programs\iLinkWM。
+'@
+    $helpText = $helpText -replace "`r?`n", "`r`n"
+    [IO.File]::WriteAllText($helpPath, $helpText, (New-Object System.Text.UTF8Encoding($false)))
 
     # ilink-wm1 直通命令：任意终端 ilink-wm1 --version / ilink-wm1 admin ...
     $exeShimPath = Join-Path $BinDir 'ilink-wm1.cmd'
     $exeShim = @'
 @echo off
-chcp 65001 >nul
 setlocal EnableExtensions
 set "APP_ROOT=%~dp0.."
 if not exist "%APP_ROOT%\ilink-wm1.exe" (
-    echo [ilink-wm1] 未找到 ilink-wm1.exe，请重新安装 iLinkWM。
+    echo [ilink-wm1] ilink-wm1.exe not found. Please reinstall iLinkWM.
     exit /b 1
 )
 cd /d "%APP_ROOT%"
@@ -267,7 +283,7 @@ if "%ILINK_DATA_DIR%"=="" set "ILINK_DATA_DIR=%APP_ROOT%\data"
 exit /b %errorlevel%
 '@
     $exeShim = $exeShim -replace "`r?`n", "`r`n"
-    [IO.File]::WriteAllText($exeShimPath, $exeShim, (New-Object System.Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($exeShimPath, $exeShim, [Text.Encoding]::ASCII)
     Write-Ok "命令入口：$cmdPath、$exeShimPath"
 }
 

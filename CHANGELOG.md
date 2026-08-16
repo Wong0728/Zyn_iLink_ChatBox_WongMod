@@ -45,13 +45,19 @@
 
 ### 第四轮（2026-08-17）：一键安装体验 + 云端仓库治理
 
+**关键修复：cmd.exe 65001 代码页批处理解析 bug**（影响所有含中文的 .cmd/.bat）：
+
+- 根因：cmd.exe 读取批处理时按「已消费字符数」而非字节数回卷文件位置，含多字节字符（UTF-8 或 GBK 均一样）的文件会错位落点，把行片段当命令执行；实测最小 4 行即可复现，纯 ASCII 文件即使切换代码页也 100% 安全。此前 `iLinkWM.cmd` 帮助输出、`start.bat`、`install-service.bat` 均不同程度中招——后者甚至出现过因错位跳过管理员权限检查的情况。
+- 修复口径一（安装器生成的 shim）：`iLinkWM.cmd` / `ilink-wm1.cmd` 命令文本全部 ASCII 化（任何代码页下解析安全），中文帮助移入 `bin\iLinkWM-help.txt`（UTF-8）由 `:help` 分支 `chcp 65001` + `type` 输出——`type` 内容不经过解析器，无错位风险；退出前恢复原代码页。
+- 修复口径二（随包分发的 .bat）：`start.bat` / `install-service.bat` 整体改写为纯 ASCII（提示信息改英文；中文完整文档见 README / 部署指南 / `iLinkWM help`），并顺带给 NSSM 下载的 PowerShell 子调用补了 `$ProgressPreference` 静音与 `-UseBasicParsing`。无需任何编码转码管线，任意区域设置的 Windows 上解析与显示均正常。
+
 **安装器（Windows）**：
 
 - 修复 `irm | iex` 首行报 `CommandNotFoundException`：脚本改存 UTF-8 无 BOM，并移除仅对脚本文件生效的 `#Requires` 指令（改为运行时版本检查）。
 - `$ProgressPreference = 'SilentlyContinue'`：消除「正在写入 Web 请求 / 正在写入请求流」进度条刷屏，同时避免 PS 5.1 进度条拖慢下载。
 - `Invoke-WebRequest` 加 `-UseBasicParsing`，规避 IE 引擎未初始化机器上的解析失败。
-- 生成的 `iLinkWM.cmd` 内所有子 PowerShell 调用加 `-NoLogo`，不再打印「Windows PowerShell / Copyright」横幅。
-- `iLinkWM` 支持 `help` / `-h` / `--help`（与 Linux 端对齐）。
+- 生成的 shim 内所有子 PowerShell 调用加 `-NoLogo`，不再打印「Windows PowerShell / Copyright」横幅。
+- `iLinkWM` 支持 `help` / `-h` / `--help`（与 Linux 端对齐）；shim 内提示信息改英文以保证任何代码页下可读。
 
 **安装器（Linux / macOS）**：
 
@@ -63,6 +69,7 @@
 
 - 内部文档（安全审计报告明细、云端发布操作指南、本地分发校验清单）移出公开仓库，历史一并清理；对外安全披露渠道改由 [SECURITY.md](SECURITY.md) 承担。
 - README / Hero 页同步修正：过时的「Release 尚未发布」提示、`/api/wasm/guide` 实际读取 `部署指南.md`、补全 `iLinkWM uninstall` 数据删除语义与 Releases 入口。
+- Pages 页面补 favicon。
 
 ---
 
