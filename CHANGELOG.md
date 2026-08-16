@@ -7,7 +7,7 @@
 
 ## v3.2.4-wm1.0（2026-08-16）
 
-相比上一版（v3.2.3 打包轮次），本版本完成了一轮完整安全审计并修复 11 项中危中的 9 项，另有个别功能增强。全部细节见根目录《安全审计报告_2026-08-16.md》。
+相比上一版（v3.2.3 打包轮次），本版本完成了一轮完整安全审计并修复 11 项中危中的 9 项，另有个别功能增强。
 
 ### 安全修复（M-1 ~ M-11）
 
@@ -20,7 +20,7 @@
 - **M-9（已修复）**：`real_client_ip` 检测「loopback 直连携带 X-Forwarded-For」的危险形态并节流告警，给出 `ILINK_TRUSTED_PROXIES` 配置指引。
 - **M-10（已修复）**：`cf-setup.ps1` 写入 cf-config.json 后立即用 `icacls` 收紧 ACL，仅当前用户可读。
 - **M-11（已修复）**：Windows 服务改用低权虚拟账户 `NT SERVICE\ilink-wm1` 运行（NSSM），并按需授权数据/日志目录写权限。
-- **M-1 / M-6**：经业主评估**接受为已知风险**，暂不修改（4 位邀请码熵不足；详见审计报告）。
+- **M-1 / M-6**：经业主评估**接受为已知风险**，暂不修改（4 位邀请码熵不足）。
 
 ### 新增
 
@@ -36,12 +36,33 @@
 
 ### 第三轮（2026-08-17）：低危清零 + 命令行增强
 
-**安全**：L-1 ~ L-24 全部处理完毕（修复 18、随前轮连带修复 2、协议/架构约束经评估接受 4：L-1 / L-5 / L-6 / L-22），逐项明细见《安全审计报告_2026-08-16.md》〇章第三轮速览。要点：token 线程标识 SHA-256 化（L-3）、webhook 投递前 DNS 钉扎（L-4）、迁移跳过表落盘报告（L-8）、导出文件名消毒（L-9）、`ILINK_FFMPEG_PATH` 钉死 ffmpeg（L-10）、删除用户失败不再吞错（L-11）、登录/注册 Origin 校验（L-12）、voice 上传修复（L-13）、内部错误不外泄（L-14）、审计 JSON serde 转义（L-15）、CSP 补 object-src（L-16）、外链 scheme 二次校验（L-17）、前端三处防御（L-18）、`ILINK_OWNER_PASSWORD_FILE`（L-19）、消息正文默认不落日志（L-20）、cf Token 密文输入（L-21）、并发撞名友好报错（L-23）、遗留 Python 隔离至 `reference/`（L-24）。
+**安全**：L-1 ~ L-24 全部处理完毕（修复 18、随前轮连带修复 2、协议/架构约束经评估接受 4：L-1 / L-5 / L-6 / L-22）。要点：token 线程标识 SHA-256 化（L-3）、webhook 投递前 DNS 钉扎（L-4）、迁移跳过表落盘报告（L-8）、导出文件名消毒（L-9）、`ILINK_FFMPEG_PATH` 钉死 ffmpeg（L-10）、删除用户失败不再吞错（L-11）、登录/注册 Origin 校验（L-12）、voice 上传修复（L-13）、内部错误不外泄（L-14）、审计 JSON serde 转义（L-15）、CSP 补 object-src（L-16）、外链 scheme 二次校验（L-17）、前端三处防御（L-18）、`ILINK_OWNER_PASSWORD_FILE`（L-19）、消息正文默认不落日志（L-20）、cf Token 密文输入（L-21）、并发撞名友好报错（L-23）、遗留 Python 隔离至 `reference/`（L-24）。
 
 **命令行**：
 
 - `ilink-wm1` 与 `iLinkWM` 一同装入 PATH：任意终端直接 `ilink-wm1 --version`、`ilink-wm1 admin ...`（等价直接调用 EXE）。
 - `iLinkWM uninstall` 语义变更：**默认一条命令删除程序与全部数据**（有确认提示）；需要保留数据改用 `iLinkWM uninstall --keep-data`（原 `--purge` 语义并入默认）。
+
+### 第四轮（2026-08-17）：一键安装体验 + 云端仓库治理
+
+**安装器（Windows）**：
+
+- 修复 `irm | iex` 首行报 `CommandNotFoundException`：脚本改存 UTF-8 无 BOM，并移除仅对脚本文件生效的 `#Requires` 指令（改为运行时版本检查）。
+- `$ProgressPreference = 'SilentlyContinue'`：消除「正在写入 Web 请求 / 正在写入请求流」进度条刷屏，同时避免 PS 5.1 进度条拖慢下载。
+- `Invoke-WebRequest` 加 `-UseBasicParsing`，规避 IE 引擎未初始化机器上的解析失败。
+- 生成的 `iLinkWM.cmd` 内所有子 PowerShell 调用加 `-NoLogo`，不再打印「Windows PowerShell / Copyright」横幅。
+- `iLinkWM` 支持 `help` / `-h` / `--help`（与 Linux 端对齐）。
+
+**安装器（Linux / macOS）**：
+
+- 修复 auto 模式逻辑 bug：Release 预编译包安装成功后仍会继续走一遍源码编译。
+- macOS（Apple Silicon）现在直接使用 Release 的 `macos_aarch64` 预编译包（原先误映射到 Linux 资产导致总回退源码编译）。
+- `install-server.sh` 步骤编号与头部说明统一为 11 步。
+
+**云端仓库治理**：
+
+- 内部文档（安全审计报告明细、云端发布操作指南、本地分发校验清单）移出公开仓库，历史一并清理；对外安全披露渠道改由 [SECURITY.md](SECURITY.md) 承担。
+- README / Hero 页同步修正：过时的「Release 尚未发布」提示、`/api/wasm/guide` 实际读取 `部署指南.md`、补全 `iLinkWM uninstall` 数据删除语义与 Releases 入口。
 
 ---
 
@@ -58,7 +79,7 @@
 | 消息能力 | 文本/媒体收发、AI 自动回复 | 同等收发能力 + 消息历史、HTML 导出、多会话备注、WebDAV 媒体外置 |
 | 安全 | 基础口令 | PBKDF2 600k 迭代、AES-256-GCM 凭证加密、DPAPI 主密钥包装、审计日志（90 天）、S10 破坏性命令二次确认、SSRF 防护、登录限流 |
 | 运维 | 手动/启动器热更新 | systemd / NSSM 服务化、Cloudflare 隧道脚本、`iLinkWM` 统一命令行、CLI 管理子命令 |
-| 审计状态 | — | 全量静态安全审计：0 高危 / 11 中危（9 已修复、2 风险接受）/ 24 低危，报告随仓库发布 |
+| 审计状态 | — | 全量静态安全审计：0 高危 / 11 中危（9 已修复、2 风险接受）/ 24 低危（已清零或评估接受） |
 | 协议 | Apache-2.0 | Apache-2.0（衍生合规标注原仓库与原作者） |
 
 > 原版的 AI 自动回复依赖外部 AI API，WongMod 当前版本未内置该能力，计划通过 Webhook / 机器人配置在后续版本提供；迁移前请先确认功能覆盖。

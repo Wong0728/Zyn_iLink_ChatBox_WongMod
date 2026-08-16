@@ -10,7 +10,7 @@
 #   ILINKWM_METHOD=auto|binary|source
 #
 # 行为：
-#   1. 优先从 GitHub Release 下载对应架构预编译包（linux_x86_64 / linux_aarch64）
+#   1. 优先从 GitHub Release 下载对应架构预编译包（linux_x86_64 / linux_aarch64 / macos_aarch64）
 #   2. 无可用预编译包时回退「git clone + cargo build --release」
 #      （出于安全考虑不自动安装 Rust 工具链，缺失时给出官方安装指引后退出）
 #   3. 安装到 ~/.local/share/iLinkWM，命令入口 ~/.local/bin/iLinkWM
@@ -48,10 +48,11 @@ DATA_DIR="${INSTALL_ROOT}/data"
 SHIM="${BIN_DIR}/iLinkWM"
 
 ARCH="$(uname -m)"
-case "$ARCH" in
-    x86_64|amd64)   ARCH_TAG='linux_x86_64' ;;
-    aarch64|arm64)  ARCH_TAG='linux_aarch64' ;;
-    *)              ARCH_TAG='' ;;
+case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64|Linux-amd64)     ARCH_TAG='linux_x86_64' ;;
+    Linux-aarch64|Linux-arm64)    ARCH_TAG='linux_aarch64' ;;
+    Darwin-arm64|Darwin-aarch64)  ARCH_TAG='macos_aarch64' ;;
+    *)                            ARCH_TAG='' ;;
 esac
 
 fetch_json() { curl -fsSL --max-time 30 "$1" 2>/dev/null || true; }
@@ -332,7 +333,11 @@ elif [[ "$METHOD" == "source" ]]; then
     install_from_source
     ok=1
 else
-    install_from_binary "$VERSION" || warn "无可用 Release 预编译包，回退源码编译模式..."
+    if install_from_binary "$VERSION"; then
+        ok=1
+    else
+        warn "无可用 Release 预编译包，回退源码编译模式..."
+    fi
     [[ $ok -eq 1 ]] || install_from_source
 fi
 

@@ -29,9 +29,9 @@ irm https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/de
 curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh | bash
 ```
 
-安装完成后即可使用 `iLinkWM` 命令：直接运行 `iLinkWM` 启动程序；`iLinkWM install-service` 注册系统服务；`iLinkWM update` 自更新；`iLinkWM uninstall` 卸载。详见 [deploy/](deploy/) 与本文档第一章。
+安装完成后即可使用 `iLinkWM` 命令：直接运行 `iLinkWM` 启动程序；`iLinkWM install-service` 注册系统服务；`iLinkWM update` 自更新；`iLinkWM uninstall` 卸载（**默认连同数据目录一起删除**，保留数据请用 `--keep-data`，均有确认提示）；`iLinkWM help` 查看全部子命令。详见 [deploy/](deploy/) 与本文档第一章。
 
-> 云端 Release 尚未发布前，一键脚本会自动回退到「克隆源码 + cargo 编译」模式。
+> 一键脚本优先下载 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 预编译包（附 SHA-256 校验）；无可用包（或对应架构缺失）时自动回退到「克隆源码 + cargo 编译」模式。
 
 ### 参考项目（致谢）
 
@@ -944,7 +944,7 @@ sudo systemctl start ilink
 | `/api/wasm/login` | POST | 公开 | 登录 |
 | `/api/wasm/register` | POST | 公开 | 注册 |
 | `/api/wasm/terms` | GET | 公开 | 守则文本+版本 |
-| `/api/wasm/guide` | GET | 公开 | 使用与管理指南（读项目根 `ilink-wm1-使用与管理指南.md`） |
+| `/api/wasm/guide` | GET | 公开 | 使用与管理指南（读部署包内 `部署指南.md`） |
 | `/api/wasm/links` | GET | 公开 | `docs_url` / `terms_url` 外链配置 |
 | `/api/wasm/site-info` | GET | 公开 | 站点名+版本 |
 | `/api/wasm/notification` | GET | 公开 | 当前全局通知 |
@@ -1011,7 +1011,8 @@ sudo systemctl start ilink
 - 本仓库：<https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod>
 - 原仓库：<https://github.com/zynsync/Zyn-iLink-ChatBox>
 - 协议生态参考：<https://github.com/openilink>
-- 安全审计：见项目根 `安全审计报告_2026-08-16.md`
+- 预编译下载：[Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases)（各平台 zip 附 `.sha256` 校验）
+- 安全披露：见 [SECURITY.md](SECURITY.md)
 - 代码规范：见项目根 `代码规范.md`
 
 如发现 bug 或有功能建议，请先查阅审计日志与本指南的"故障排查"章节，确认非配置问题后再反馈。

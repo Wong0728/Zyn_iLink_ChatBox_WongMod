@@ -1,4 +1,3 @@
-﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   iLink-WM1 (iLinkWM) Windows 一键安装器
@@ -9,12 +8,19 @@
   用法（PowerShell）：
     irm https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/windows/install.ps1 | iex
 
+  本脚本面向 irm | iex 分发，必须保持 UTF-8 无 BOM：带 BOM 时首个语句会被
+  解析成命令名导致 CommandNotFoundException。
+
   可选环境变量：
     ILINKWM_VERSION  指定版本 tag（如 v3.2.4），默认 latest
     ILINKWM_METHOD   auto | binary | source（默认 auto）
 #>
 
+if ($PSVersionTable.PSVersion.Major -lt 5) { throw '[iLinkWM] 需要 Windows PowerShell 5.1 或更高版本。' }
 $ErrorActionPreference = 'Stop'
+# 静音 Invoke-WebRequest/RestMethod 的进度条（"正在写入请求流..."），
+# 同时避免 PS 5.1 进度条渲染拖慢下载
+$ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $Repo        = 'Wong0728/Zyn_iLink_ChatBox_WongMod'
@@ -48,7 +54,7 @@ function Install-FromBinary {
     New-Item -ItemType Directory -Path $tmp -Force | Out-Null
     $zip = Join-Path $tmp $asset.name
     Write-Info "下载 $($asset.name)（$([math]::Round($asset.size/1MB,1)) MB）..."
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -TimeoutSec 600
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -TimeoutSec 600 -UseBasicParsing
 
     $extract = Join-Path $tmp 'extract'
     Expand-Archive -Path $zip -DestinationPath $extract -Force
@@ -132,6 +138,9 @@ if /i "%~1"=="uninstall"          goto :uninstall
 if /i "%~1"=="install-service"    goto :instsvc
 if /i "%~1"=="uninstall-service"  goto :uninstsvc
 if /i "%~1"=="service"            goto :service
+if /i "%~1"=="help"               goto :help
+if /i "%~1"=="-h"                 goto :help
+if /i "%~1"=="--help"             goto :help
 if /i "%~1"=="ilinkwm-help"       goto :help
 goto :run
 
@@ -148,14 +157,14 @@ exit /b %errorlevel%
 
 :update
 echo [iLinkWM] 正在检查并安装最新版本...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm RAWBASE/deploy/windows/install.ps1 | iex"
+powershell -NoProfile -NoLogo -ExecutionPolicy Bypass -Command "irm RAWBASE/deploy/windows/install.ps1 | iex"
 exit /b %errorlevel%
 
 :instsvc
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo [iLinkWM] 注册 Windows 服务需要管理员权限，正在请求提权...
-    powershell -NoProfile -Command "Start-Process -Verb RunAs -FilePath '%APP_ROOT%\install-service.bat'"
+    powershell -NoProfile -NoLogo -Command "Start-Process -Verb RunAs -FilePath '%APP_ROOT%\install-service.bat'"
     exit /b 0
 )
 call "%APP_ROOT%\install-service.bat"
@@ -165,7 +174,7 @@ exit /b %errorlevel%
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo [iLinkWM] 卸载服务需要管理员权限，正在请求提权...
-    powershell -NoProfile -Command "Start-Process -Verb RunAs -FilePath 'cmd.exe' -ArgumentList '/c \"APPROOTRELSLASH\nssm.exe\" stop ilink-wm1 && \"APPROOTRELSLASH\nssm.exe\" remove ilink-wm1 confirm'"
+    powershell -NoProfile -NoLogo -Command "Start-Process -Verb RunAs -FilePath 'cmd.exe' -ArgumentList '/c \"APPROOTRELSLASH\nssm.exe\" stop ilink-wm1 && \"APPROOTRELSLASH\nssm.exe\" remove ilink-wm1 confirm'"
     exit /b 0
 )
 if exist "%APP_ROOT%\bin\nssm.exe" (
@@ -201,9 +210,9 @@ if exist "%APP_ROOT%\bin\nssm.exe" (
     "%APP_ROOT%\bin\nssm.exe" stop ilink-wm1 >nul 2>&1
     "%APP_ROOT%\bin\nssm.exe" remove ilink-wm1 confirm >nul 2>&1
 )
-powershell -NoProfile -Command "$b='BINDIR'; $p=[Environment]::GetEnvironmentVariable('Path','User'); $new=($p -split ';' | Where-Object { $_ -and $_ -ne $b }) -join ';'; [Environment]::SetEnvironmentVariable('Path',$new,'User')"
+powershell -NoProfile -NoLogo -Command "$b='BINDIR'; $p=[Environment]::GetEnvironmentVariable('Path','User'); $new=($p -split ';' | Where-Object { $_ -and $_ -ne $b }) -join ';'; [Environment]::SetEnvironmentVariable('Path',$new,'User')"
 if /i "%MODE%"=="--keep-data" (
-    powershell -NoProfile -Command "Remove-Item -Recurse -Force 'INSTALLROOT\web','INSTALLROOT\ilink-wm1.exe','INSTALLROOT\bin','INSTALLROOT\logs' -ErrorAction SilentlyContinue"
+    powershell -NoProfile -NoLogo -Command "Remove-Item -Recurse -Force 'INSTALLROOT\web','INSTALLROOT\ilink-wm1.exe','INSTALLROOT\bin','INSTALLROOT\logs' -ErrorAction SilentlyContinue"
     echo [iLinkWM] 已卸载（数据目录保留在 DATADIR，需要时手动删除）。
 ) else (
     echo [iLinkWM] 已卸载（程序与数据目录 DATADIR 将在 2 秒后全部删除）。
@@ -219,6 +228,7 @@ exit /b 0
 echo iLinkWM - Zyn iLink ChatBox WongMod 统一命令
 echo.
 echo   iLinkWM                     启动程序（首次运行进入初始化向导）
+echo   iLinkWM help                显示本帮助（-h / --help 同效）
 echo   iLinkWM install-service     注册 Windows 服务（NSSM，需管理员）
 echo   iLinkWM uninstall-service   移除 Windows 服务（需管理员）
 echo   iLinkWM service start^|stop  启停服务（需管理员）；其余参数查询状态

@@ -29,3 +29,8 @@ scripts/cf-ddns.log
 
 # Per-zip checksum sidecars (generated)
 *.sha256
+
+# Internal-only docs & local dist artifacts（本地留存，不入公开仓库）
+/安全审计报告_*.md
+/云端发布指南.md
+/分发/

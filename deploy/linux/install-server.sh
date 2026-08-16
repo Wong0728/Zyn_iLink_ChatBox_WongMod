@@ -14,10 +14,11 @@
 #   4. 创建 /opt/ilink 目录与 ilink 系统用户
 #   5. 解压源码到 /opt/ilink/ilink_wm_v3.2.4
 #   6. cargo build --release（显示进度）
-#   7. 生成 /etc/ilink/env 与 /etc/systemd/system/ilink.service
-#   8. systemctl enable --now ilink
-#   9. 防火墙放行 8888 端口
-#  10. 在注册服务前通过终端完成 owner 初始化
+#   7. 设置目录权限，终端初始化 owner
+#   8. 选择安全模式，生成 /etc/ilink/env 与 /etc/systemd/system/ilink.service
+#   9. systemctl enable --now ilink
+#  10. 防火墙放行 8888 端口
+#  11. 输出访问地址与后续步骤
 #
 # 卸载：
 #   sudo systemctl stop ilink
@@ -59,7 +60,7 @@ ENV_FILE="/etc/ilink/env"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 # ── Step 0: 检查源码包 ────────────────────────────────────
-info "Step 0/10: 检查源码包..."
+info "Step 0/11: 检查源码包..."
 SRC_FROM_GIT=0
 if [[ ! -f "$SRC_ZIP" ]]; then
     # 无源码包时尝试直接克隆仓库
@@ -78,7 +79,7 @@ else
 fi
 
 # ── Step 1: 检测包管理器 ──────────────────────────────────
-info "Step 1/10: 检测系统包管理器..."
+info "Step 1/11: 检测系统包管理器..."
 PKG_MANAGER=""
 if command -v apt-get &>/dev/null; then
     PKG_MANAGER="apt"
@@ -93,7 +94,7 @@ fi
 success "包管理器: $PKG_MANAGER"
 
 # ── Step 2: 安装系统依赖 ──────────────────────────────────
-info "Step 2/10: 安装系统依赖..."
+info "Step 2/11: 安装系统依赖..."
 case "$PKG_MANAGER" in
     apt)
         apt-get update -y
@@ -107,7 +108,7 @@ esac
 success "系统依赖已安装"
 
 # ── Step 3: 检查 Rust 工具链 ──────────────────────────────
-info "Step 3/10: 检查 Rust 工具链..."
+info "Step 3/11: 检查 Rust 工具链..."
 if command -v cargo &>/dev/null; then
     success "Rust 已安装: $(cargo --version)"
 else
@@ -118,7 +119,7 @@ else
 fi
 
 # ── Step 4: 创建系统用户与目录 ────────────────────────────
-info "Step 4/10: 创建系统用户与目录..."
+info "Step 4/11: 创建系统用户与目录..."
 if id "$SERVICE_USER" &>/dev/null; then
     warn "用户 $SERVICE_USER 已存在，跳过创建"
 else
@@ -130,7 +131,7 @@ mkdir -p "$INSTALL_DIR" "$DATA_DIR"
 success "目录已创建: $INSTALL_DIR, $DATA_DIR"
 
 # ── Step 5: 解压源码 ──────────────────────────────────────
-info "Step 5/10: 解压源码..."
+info "Step 5/11: 解压源码..."
 # 备份旧目录（若存在）
 if [[ -d "$APP_DIR" ]]; then
     BACKUP_TS=$(date +%Y%m%d_%H%M%S)
@@ -151,7 +152,7 @@ fi
 success "源码已就位于 $APP_DIR"
 
 # ── Step 6: 编译 ──────────────────────────────────────────
-info "Step 6/10: 编译 release 版本（约 3-10 分钟，请耐心等待）..."
+info "Step 6/11: 编译 release 版本（约 3-10 分钟，请耐心等待）..."
 # 用当前 root 用户的 cargo 编译（避免 ilink 用户无 shell 无法用 rustup）
 # 编译产物在 target/release/ilink-wm1
 cd "$APP_DIR"
@@ -173,7 +174,7 @@ fi
 success "编译成功: $BINARY ($(ls -lh $BINARY | awk '{print $5}'))"
 
 # ── Step 7: 设置目录权限 ──────────────────────────────────
-info "Step 7/10: 设置目录权限..."
+info "Step 7/11: 设置目录权限..."
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$INSTALL_DIR"
 chmod 750 "$INSTALL_DIR"
 chmod 750 "$DATA_DIR"
