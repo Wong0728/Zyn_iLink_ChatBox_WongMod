@@ -234,7 +234,10 @@ exit /b 0
     $shim = $shim.Replace('INSTALLROOT', $InstallRoot)
     $shim = $shim.Replace('DATADIR', $DataDir)
     $shim = $shim.Replace('APPROOTRELSLASH', ($InstallRoot + '\bin'))
-    # UTF-8 无 BOM：cmd.exe 逐行解析，首行 chcp 65001 后中文正常
+    # 行尾强制 CRLF：经 raw.githubusercontent 下载的本脚本是 LF（git 归一化），
+    # here-string 会继承 LF；cmd.exe 解析 LF 行尾的批处理不可靠，必须转换。
+    # UTF-8 无 BOM：cmd.exe 逐行解析，首行 chcp 65001 后中文正常。
+    $shim = $shim -replace "`r?`n", "`r`n"
     [IO.File]::WriteAllText($cmdPath, $shim, (New-Object System.Text.UTF8Encoding($false)))
 
     # ilink-wm1 直通命令：任意终端 ilink-wm1 --version / ilink-wm1 admin ...
@@ -253,6 +256,7 @@ if "%ILINK_DATA_DIR%"=="" set "ILINK_DATA_DIR=%APP_ROOT%\data"
 "%APP_ROOT%\ilink-wm1.exe" %*
 exit /b %errorlevel%
 '@
+    $exeShim = $exeShim -replace "`r?`n", "`r`n"
     [IO.File]::WriteAllText($exeShimPath, $exeShim, (New-Object System.Text.UTF8Encoding($false)))
     Write-Ok "命令入口：$cmdPath、$exeShimPath"
 }
