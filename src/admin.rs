@@ -800,7 +800,8 @@ fn cmd_invite(system_db: &SystemDatabase, cmd: &InviteCmd) -> anyhow::Result<()>
                 "cli",
                 "admin.invite.create",
                 Some(&code),
-                Some(&format!("{{\"days\":{},\"note\":\"{}\"}}", days, note)),
+                // L-15：note 为自由文本，经 serde_json 转义防破坏 JSON 结构
+                Some(&serde_json::json!({ "days": days, "note": note }).to_string()),
             );
             println!("  ✓ 邀请码创建成功");
             println!("    code       : {}", code);
@@ -1032,7 +1033,8 @@ fn cmd_ip(system_db: &SystemDatabase, auth: &Auth, cmd: &IpCmd) -> anyhow::Resul
                 "cli",
                 "admin.ip.ban",
                 Some(&network),
-                Some(&format!("{{\"days\":{},\"reason\":\"{}\"}}", days, reason)),
+                // L-15：reason 为自由文本，经 serde_json 转义防破坏 JSON 结构
+                Some(&serde_json::json!({ "days": days, "reason": reason }).to_string()),
             );
             if *days > 0 {
                 println!("  ✓ IP/CIDR {} 已被封禁（{} 天）", network, days);
@@ -1285,7 +1287,8 @@ fn cmd_webset(system_db: &SystemDatabase, auth: &Auth, cmd: &WebsetCmd) -> anyho
                 "cli",
                 "admin.webset.set",
                 Some("admin.web_access"),
-                Some(&format!("{{\"value\":\"{}\"}}", normalized)),
+                // L-15：value 经 serde_json 转义防破坏 JSON 结构
+                Some(&serde_json::json!({ "value": normalized }).to_string()),
             );
             println!("  ✓ 已设置 admin.web_access = {}", normalized);
             println!("    即时生效，无需重启服务");

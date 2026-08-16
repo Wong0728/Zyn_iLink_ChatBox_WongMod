@@ -363,9 +363,10 @@
       <div class="cmd-body">iLinkWM                      <span class="p"># 启动程序（首次进入初始化向导）</span>
 iLinkWM install-service      <span class="p"># 注册系统服务（Win: NSSM / Linux: systemd）</span>
 iLinkWM update               <span class="p"># 更新到最新版本（保留数据）</span>
-iLinkWM uninstall [--purge]  <span class="p"># 卸载（--purge 连数据一起删）</span>
-iLinkWM admin ...            <span class="p"># 管理子命令原样传给 ilink-wm1</span></div>
-      <p class="cmd-note">预编译包见 GitHub Releases（Windows x64 / Linux x64·arm64 / macOS arm64 + 源码包，附 SHA-256 校验）。</p>
+iLinkWM uninstall [--keep-data]  <span class="p"># 一条命令卸载（默认连数据一起删）</span>
+iLinkWM admin ...            <span class="p"># 管理子命令原样传给 ilink-wm1</span>
+ilink-wm1 --version          <span class="p"># 二进制直通命令（同在 PATH）</span></div>
+      <p class="cmd-note">安装后 <code style="font-family:var(--font-mono);">ilink-wm1</code> 与 <code style="font-family:var(--font-mono);">iLinkWM</code> 一同进入 PATH；预编译包见 GitHub Releases（Windows x64 / Linux x64·arm64 / macOS arm64 + 源码包，附 SHA-256 校验）。</p>
     </div>
   </div>
 </section>

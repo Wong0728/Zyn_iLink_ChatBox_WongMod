@@ -269,7 +269,14 @@ fn run_ffmpeg(input_data: &[u8], _output_format: &str, args: &[&str]) -> Option<
     // 获取 ffmpeg 并发许可，限制同时运行的转码任务数量。
     let _permit = FFMPEG_SEM.1.recv().ok().map(|_| FfmpegPermit)?;
 
-    let mut child = Command::new("ffmpeg")
+    // L-10：ffmpeg 默认经 PATH 查找（存在本地 PATH 劫持面）。部署方可用
+    //      ILINK_FFMPEG_PATH 指定绝对路径，钉死二进制来源。
+    let ffmpeg = std::env::var("ILINK_FFMPEG_PATH")
+        .ok()
+        .filter(|p| !p.trim().is_empty())
+        .unwrap_or_else(|| "ffmpeg".to_string());
+
+    let mut child = Command::new(&ffmpeg)
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -262,7 +262,10 @@ if ([string]::IsNullOrWhiteSpace($Token) -and -not $Yes) {
   5. Continue → Create Token → 复制生成的 Token 粘贴到下方
 "@
     try { Start-Process "https://dash.cloudflare.com/profile/api-tokens" } catch {}
-    $Token = Read-Host "粘贴 API Token"
+    # L-21：Token 交互输入改为密文读取（-AsSecureString），不再明文回显到终端
+    $TokenSec = Read-Host "粘贴 API Token" -AsSecureString
+    $Token = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($TokenSec))
 }
 if ([string]::IsNullOrWhiteSpace($Token)) { Write-Fail "缺少 API Token（-Token 或环境变量 CF_API_TOKEN）"; exit 1 }
 

@@ -548,7 +548,14 @@ impl Auth {
             .create_user(uid, username, &hash, &salt, PBKDF2_ITERATIONS as i64, role)
             .map_err(|e| {
                 tracing::warn!("[M14] create_user 失败 username={}: {}", username, e);
-                "创建用户失败，请稍后重试".to_string()
+                // L-23：查重与插入非原子，并发撞名时由 UNIQUE 约束兜底——
+                //      识别该形态返回与预检一致的业务消息，而非笼统的"稍后重试"。
+                let msg = e.to_string();
+                if msg.contains("UNIQUE") || msg.contains("unique") {
+                    "用户名已存在".to_string()
+                } else {
+                    "创建用户失败，请稍后重试".to_string()
+                }
             })?;
 
         Ok(uid)

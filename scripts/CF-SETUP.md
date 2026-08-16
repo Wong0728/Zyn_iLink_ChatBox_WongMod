@@ -99,5 +99,5 @@ powershell -File cf-setup.ps1 -Ddns      # Windows
 
 ## 六、安全提示
 
-- `cf-config.json` 内含 API Token：不要提交进仓库、不要放进网盘同步目录（本目录已在 `.gitignore` 外，请自行确认）。
+- `cf-config.json` 内含 API Token：不要提交进仓库、不要放进网盘同步目录。仓库 `.gitignore` 已包含 `scripts/cf-config.json` 与 `scripts/cf-ddns.log`（不会被 git 跟踪），但仍请避免把该文件拷贝到仓库外的同步目录（I-3 修正：以 `.gitignore` 实际规则为准）。
 - 直连暴露的是 ilink-wm Web 服务本身，务必：owner 强密码、保留登录限流/IP 封禁（本轮已支持 IPv6 与隧道真实 IP）、及时停用不用的 serveo 隧道。

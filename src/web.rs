@@ -405,8 +405,14 @@ fn validate_upload_file(data: &[u8], media_type: &str) -> Result<(), String> {
                 ));
             }
         }
+        "voice" => {
+            // L-13：语音走 send_voice 链路（与 send_media_inner 的 "voice" 分支对齐），
+            //      修复原实现落入 `_` 分支被拒的功能缺陷。微信语音为 SILK/AMR 等私有
+            //      封装，魔数检测不可靠，故不做类型校验，仅受全局 50MB 上限与并发信号量约束。
+        }
         "file" => {
-            // 通用文件，无额外限制
+            // 通用文件，无额外限制（功能设计：聊天文件发送本就需要任意类型；
+            // 全局仍有 50MB 上限 + 并发信号量 + sanitize_filename 路径消毒兜底）。
         }
         _ => {
             return Err(format!("不支持的媒体类型: {}", media_type));
@@ -1179,13 +1185,16 @@ async fn security_headers(request: Request, next: Next) -> Response {
         );
     }
     // Content-Security-Policy：限制脚本/连接/媒体来源，阻挡 XSS 外发数据。
-    // 策略说明：script-src 含 'unsafe-inline'（现有 HTML 依赖内联脚本）；
+    // 策略说明：script-src 含 'unsafe-inline'（现有 HTML 依赖内联脚本与内联事件，
+    //   L-16：移除需整站 nonce 化改造，列入后续版本；本轮已补 object-src 'none'
+    //   显式禁用插件内容，其余指令维持最严格可用配置）；
     // connect-src 仅允许同源 + ws/wss；img-src 允许 data/blob + CDN；
     // frame-ancestors + base-uri + form-action 均为 'self'。
     if !headers.contains_key("content-security-policy") {
         if let Ok(csp) = header::HeaderValue::from_str(
             "default-src 'self'; \
              script-src 'self' 'unsafe-inline'; \
+             object-src 'none'; \
              connect-src 'self' ws: wss:; \
              img-src 'self' data: blob: https://ms.188850.xyz; \
              media-src 'self' blob: data:; \
@@ -1494,6 +1503,17 @@ fn is_origin_allowed(origin: &str, port: u16) -> bool {
     false
 }
 
+/// L-12：公开登录/注册路由的登录 CSRF 防护（login CSRF）。
+///   浏览器跨站 POST 必携带 Origin；存在且不在白名单 → 拒绝，
+///   阻断「攻击页静默让受害者登录攻击者账号」。
+///   Origin 缺失（curl / 原生客户端 / 同源旧浏览器）放行，不影响自动化与正常使用。
+fn login_origin_rejected(headers: &HeaderMap, port: u16) -> bool {
+    match headers.get("origin").and_then(|v| v.to_str().ok()) {
+        Some(origin) => !is_origin_allowed(origin, port),
+        None => false,
+    }
+}
+
 /// S11: 请求来源是否可信——loopback 直连，或 Origin 在允许列表中
 // ceiling=is_request_trusted 当前无调用方，保留以备 CSRF 信任链扩展。
 #[allow(dead_code)]
@@ -1659,7 +1679,8 @@ async fn api_set_email(
                 &format!("uid={}", user.uid),
                 "user.set-email",
                 Some(&format!("uid={}", user.uid)),
-                Some(&format!("{{\"email\":\"{}\"}}", email)),
+                // L-15：email 用户可控、可含引号，必须经 serde_json 转义而非 format! 手拼
+                Some(&serde_json::json!({ "email": email }).to_string()),
             );
             Json(serde_json::json!({"success": true})).into_response()
         }
@@ -2015,10 +2036,11 @@ async fn api_admin_user_create(
                 &format!("uid={}", user.uid),
                 "admin.user.create",
                 Some(&format!("uid={}", uid)),
-                Some(&format!(
-                    "{{\"username\":\"{}\",\"role\":\"{}\"}}",
-                    body.username, allowed_role
-                )),
+                // L-15：JSON 字段经 serde_json 转义（防引号破坏结构）
+                Some(&serde_json::json!({
+                    "username": body.username,
+                    "role": allowed_role
+                }).to_string()),
             );
             Ok(Json(serde_json::json!({
                 "success": true, "uid": uid, "username": body.username, "role": allowed_role
@@ -2104,10 +2126,12 @@ async fn api_admin_user_disable(
         &format!("uid={}", user.uid),
         "admin.user.disable",
         Some(&format!("uid={}", u.id)),
-        Some(&format!(
-            "{{\"username\":\"{}\",\"sessions_revoked\":{},\"device_tokens_revoked\":{}}}",
-            u.username, sessions_ok, device_tokens_ok
-        )),
+        // L-15：JSON 字段经 serde_json 转义（防引号破坏结构）
+        Some(&serde_json::json!({
+            "username": u.username,
+            "sessions_revoked": sessions_ok,
+            "device_tokens_revoked": device_tokens_ok
+        }).to_string()),
     );
     Ok(Json(serde_json::json!({
         "success": true,
@@ -2144,7 +2168,8 @@ async fn api_admin_user_enable(
         &format!("uid={}", user.uid),
         "admin.user.enable",
         Some(&format!("uid={}", u.id)),
-        Some(&format!("{{\"username\":\"{}\"}}", u.username)),
+        // L-15：JSON 字段经 serde_json 转义（防引号破坏结构）
+        Some(&serde_json::json!({ "username": u.username }).to_string()),
     );
     Ok(Json(serde_json::json!({"success": true})).into_response())
 }
@@ -2192,10 +2217,8 @@ async fn api_admin_user_delete(
     //   审计字段：actor（执行者 uid）、target（被删 uid）、detail（用户名+角色）。
     let actor = format!("uid={}", user.uid);
     let target = format!("uid={}", u.id);
-    let detail = format!(
-        "{{\"username\":\"{}\",\"role\":\"{}\"}}",
-        u.username, u.role
-    );
+    // L-15：JSON 字段经 serde_json 转义（防引号破坏结构）
+    let detail = serde_json::json!({ "username": u.username, "role": u.role }).to_string();
     if !audit_log(
         &state.system_db,
         &actor,
@@ -2210,7 +2233,16 @@ async fn api_admin_user_delete(
         }))
         .into_response());
     }
-    let _ = state.system_db.delete_user(u.id);
+    // L-11：删除失败必须回传错误（原 `let _ =` 吞掉失败仍返回 success）
+    if let Err(e) = state.system_db.delete_user(u.id) {
+        tracing::error!("[WEB] delete_user 失败 uid={}: {}", u.id, e);
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "error": "delete_failed",
+            "message": "删除用户失败，请查看服务端日志"
+        }))
+        .into_response());
+    }
     Ok(Json(serde_json::json!({"success": true})).into_response())
 }
 
@@ -2333,20 +2365,19 @@ async fn api_admin_set_setting(
         )
             .into_response());
     }
-    state
-        .system_db
-        .set_setting(&body.key, &body.value)
-        .map_err(|error| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "success": false,
-                    "error": "setting_write_failed",
-                    "message": error.to_string()
-                })),
-            )
-                .into_response()
-        })?;
+    if let Err(error) = state.system_db.set_setting(&body.key, &body.value) {
+        // L-14：内部错误详情进日志，客户端只收通用消息（防内部信息泄露）
+        tracing::error!("[WEB] set_setting 失败 key={}: {}", body.key, error);
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "setting_write_failed",
+                "message": "配置写入失败，请查看服务端日志"
+            })),
+        )
+            .into_response());
+    }
     // 审计日志写入失败时 warn 告警，不阻断业务。
     audit_log(
         &state.system_db,
@@ -2528,20 +2559,19 @@ async fn api_admin_ip_ban(
         .into_response());
     }
     let days = if body.days > 0 { Some(body.days) } else { None };
-    state
-        .system_db
-        .ban_ip(&network, &body.reason, &format!("uid={}", user.uid), days)
-        .map_err(|error| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "success": false,
-                    "error": "ip_ban_write_failed",
-                    "message": error.to_string()
-                })),
-            )
-                .into_response()
-        })?;
+    if let Err(error) = state.system_db.ban_ip(&network, &body.reason, &format!("uid={}", user.uid), days) {
+        // L-14：内部错误详情进日志，客户端只收通用消息（防内部信息泄露）
+        tracing::error!("[WEB] ban_ip 失败 {}: {}", network, error);
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "ip_ban_write_failed",
+                "message": "封禁写入失败，请查看服务端日志"
+            })),
+        )
+            .into_response());
+    }
     // 审计日志写入失败时 warn 告警，不阻断业务。
     //   ban_ip 是普通操作（封 IP）——封禁动作本身已生效，审计失败仅告警。
     //   解封才需阻断（见 api_admin_ip_unban）。
@@ -2604,17 +2634,19 @@ async fn api_admin_ip_unban(
         }))
         .into_response());
     }
-    state.system_db.unban_ip(&network).map_err(|error| {
-        (
+    if let Err(error) = state.system_db.unban_ip(&network) {
+        // L-14：内部错误详情进日志，客户端只收通用消息（防内部信息泄露）
+        tracing::error!("[WEB] unban_ip 失败 {}: {}", network, error);
+        return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
                 "success": false,
                 "error": "ip_unban_write_failed",
-                "message": error.to_string()
+                "message": "解封写入失败，请查看服务端日志"
             })),
         )
-            .into_response()
-    })?;
+            .into_response());
+    }
     // 解封后主动刷新缓存，确保解封立即生效（不等 TTL）。
     {
         let mut cache = state.ip_ban_cache.write();
@@ -3141,8 +3173,17 @@ async fn api_terms(State(state): State<Arc<AppState>>) -> Json<serde_json::Value
 
 /// Get external links configuration (docs URL, terms URL)
 async fn api_links(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
-    let docs_url = state.system_db.get_setting("docs.url").unwrap_or_default();
-    let terms_url = state.system_db.get_setting("terms.url").unwrap_or_default();
+    // L-17：读取侧二次校验 scheme。写入侧 validate_system_setting 已强制 http/https，
+    //      但 CLI 直改 DB 可注入 javascript: 等危险 scheme，读取时兜底过滤。
+    let sanitize_link = |v: String| -> String {
+        if v.starts_with("http://") || v.starts_with("https://") {
+            v
+        } else {
+            String::new()
+        }
+    };
+    let docs_url = sanitize_link(state.system_db.get_setting("docs.url").unwrap_or_default());
+    let terms_url = sanitize_link(state.system_db.get_setting("terms.url").unwrap_or_default());
     Json(serde_json::json!({
         "success": true,
         "docs_url": docs_url,
@@ -3240,6 +3281,18 @@ async fn api_register(
     let rl_key = format!("{}|register", client_ip.0);
     if state.bot.check_rate_limit(&rl_key, 5, 300.0) {
         return rate_limited_response("register");
+    }
+
+    // L-12：登录/注册 CSRF 防护（跨站 Origin 拒绝，见 login_origin_rejected）
+    if login_origin_rejected(&headers, state.bot.web_port()) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "success": false, "error": "forbidden",
+                "message": "请求来源不被信任（Origin 校验失败）"
+            })),
+        )
+            .into_response();
     }
 
     // 1. 用户名正则：^[A-Za-z0-9_-]{3,32}$
@@ -3717,6 +3770,19 @@ async fn api_login(
             .body(value.to_string().into())
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     };
+
+    // L-12：登录/注册 CSRF 防护（跨站 Origin 拒绝，见 login_origin_rejected）。
+    //   阻断攻击页静默把受害者登录进攻击者账号；Origin 缺失（curl 等）放行。
+    if login_origin_rejected(&headers, state.bot.web_port()) {
+        return build_json_response(
+            StatusCode::FORBIDDEN,
+            serde_json::json!({
+                "success": false, "error": "forbidden",
+                "message": "请求来源不被信任（Origin 校验失败）"
+            }),
+            None,
+        );
+    }
 
     // Phase 1 多用户：username 缺失或空 → 回退 "owner"（兼容旧前端）
     let username = body
@@ -5989,7 +6055,15 @@ async fn api_export_history(
         return StatusCode::BAD_REQUEST.into_response();
     }
     let html = bot.db.export_user_messages_html(&user_id, &nickname);
-    let disposition = format!("attachment; filename=\"chat-{}.html\"", user_id);
+    // L-9：文件名消毒——剥除 CR/LF/引号/分号等可破坏 Content-Disposition 属性的字符，
+    //      避免 HeaderValue 解析边缘形态（user_id 理论上受白名单约束，此处纵深防御）。
+    let safe_id: String = user_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(64)
+        .collect();
+    let safe_id = if safe_id.is_empty() { "chat".to_string() } else { safe_id };
+    let disposition = format!("attachment; filename=\"chat-{}.html\"", safe_id);
     (
         StatusCode::OK,
         [

@@ -653,6 +653,8 @@
             return;
         }
         var level = data.level || "info";
+        // L-18：level 参与拼 className，白名单校验防注入未知类名
+        if (["info", "warn", "error"].indexOf(level) === -1) level = "info";
         bars.forEach(function(bar) {
             if (!bar) return;
             bar.className = "global-notification-bar show " + level;

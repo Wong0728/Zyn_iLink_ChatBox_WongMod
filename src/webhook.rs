@@ -178,8 +178,31 @@ impl WebhookDispatcher {
 }
 
 /// S17b: 在 worker 线程中执行 blocking 投递，带 3 次重试 [1s, 5s, 15s]
-fn deliver_once(client: &Client, url: &str, body: &str, token: Option<&str>) {
+/// L-4：投递前对该 URL 重新执行 SSRF 校验并 DNS 钉扎（resolve 固定 IP），
+///      消除「入队校验通过 → 1h 周期重校验之间」的 DNS 重绑定窗口。
+///      校验失败即丢弃该投递（URL 仅源自环境变量，正常部署不会触发）。
+fn deliver_once(_client: &Client, url: &str, body: &str, token: Option<&str>) {
     let retry_delays = [1u64, 5, 15];
+    let (host, port, ip) = match crate::bot::ssrf_safe_resolve(url) {
+        Some(r) => r,
+        None => {
+            tracing::warn!("[WEBHOOK] 投递前 SSRF 复检失败，丢弃 {}", url);
+            return;
+        }
+    };
+    let socket_addr = std::net::SocketAddr::new(ip, port);
+    let pinned = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(10))
+        .resolve(&host, socket_addr)
+        .build();
+    let client = match pinned {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("[WEBHOOK] 构建钉扎 client 失败 {}: {}", url, e);
+            return;
+        }
+    };
     for (attempt, &delay) in retry_delays.iter().enumerate() {
         if attempt > 0 {
             std::thread::sleep(Duration::from_secs(delay));

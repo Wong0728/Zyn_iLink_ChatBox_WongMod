@@ -129,6 +129,9 @@ pub fn migrate_legacy_to_multiuser(system_db: &SystemDatabase) -> anyhow::Result
             "media_remote",
             "webdav_config",
         ];
+        // L-8：跳过的表不再只留单条 warn——汇总计数并在迁移完成后写入
+        //      数据目录 migration-skipped.txt，防止运维漏看导致数据缺失无据可查。
+        let mut skipped: Vec<(String, String)> = Vec::new();
         for table in &tables {
             let sql = format!("INSERT INTO {} SELECT * FROM old.{}", table, table);
             match conn.execute(&sql, []) {
@@ -136,8 +139,31 @@ pub fn migrate_legacy_to_multiuser(system_db: &SystemDatabase) -> anyhow::Result
                 Err(e) => {
                     // 老版本可能无 messages_v2 等表，或列结构不一致 → 跳过不中断
                     tracing::warn!("[MIGRATION] 跳过表 {}: {}", table, e);
+                    skipped.push((table.to_string(), e.to_string()));
                 }
             }
+        }
+        if !skipped.is_empty() {
+            let report_path = config::base_dir().join("migration-skipped.txt");
+            let report = format!(
+                "iLink-WM1 迁移跳过报告 {}\n老库: {}\n共 {} 张表未复制（详情见下，老库备份保留在 .pre-migration-bak）：\n\n{}\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                legacy_path_str,
+                skipped.len(),
+                skipped
+                    .iter()
+                    .map(|(t, e)| format!("  - {}: {}", t, e))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+            if let Err(we) = fs::write(&report_path, report) {
+                tracing::warn!("[MIGRATION] 跳过报告写入失败 {}: {}", report_path.display(), we);
+            }
+            tracing::warn!(
+                "[MIGRATION] 共 {} 张表未复制，报告已写入 {}",
+                skipped.len(),
+                report_path.display()
+            );
         }
 
         // DETACH 老库，释放对老库文件的引用

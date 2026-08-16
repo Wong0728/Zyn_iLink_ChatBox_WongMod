@@ -238,10 +238,10 @@ UNIT
         else systemctl --user "\$@" ilink-wm1; fi
         ;;
     uninstall)
-        purge="\${2:-}"
-        if [[ "\$purge" == "--purge" ]]; then confirm="Y"
+        mode="\${2:-}"
+        if [[ "\$mode" == "--keep-data" ]]; then confirm="Y"
         else
-            printf '卸载 iLinkWM？（数据目录将被保留；输入 Y 确认）: '
+            printf '卸载 iLinkWM 并删除程序与全部数据（%s）？输入 Y 确认（保留数据请用 --keep-data）: ' "\$DATA"
             read -r confirm < /dev/tty
         fi
         [[ "\$confirm" == "Y" || "\$confirm" == "y" ]] || { echo "[iLinkWM] 已取消。"; exit 0; }
@@ -252,14 +252,14 @@ UNIT
             systemctl --user disable --now ilink-wm1 2>/dev/null || true
             rm -f ~/.config/systemd/user/ilink-wm1.service 2>/dev/null || true
         fi
-        if [[ "\$purge" == "--purge" ]]; then
-            rm -rf "\$APP_ROOT"
-            echo "[iLinkWM] 已卸载（含数据目录）。"
-        else
+        if [[ "\$mode" == "--keep-data" ]]; then
             find "\$APP_ROOT" -mindepth 1 -maxdepth 1 ! -name data -exec rm -rf {} +
             echo "[iLinkWM] 已卸载（数据目录保留在 \$DATA，需要时手动删除）。"
+        else
+            rm -rf "\$APP_ROOT"
+            echo "[iLinkWM] 已卸载（程序与数据已全部删除）。"
         fi
-        rm -f "\$SHIM"
+        rm -f "\$SHIM" "\$BIN_DIR/ilink-wm1"
         echo "[iLinkWM] 完成。"
         ;;
     ilinkwm-help|help)
@@ -270,8 +270,9 @@ UNIT
         echo "  iLinkWM uninstall-service  移除 systemd 服务"
         echo "  iLinkWM service start|stop|restart|status  服务控制"
         echo "  iLinkWM update             更新到最新版本"
-        echo "  iLinkWM uninstall [--purge] 卸载（--purge 连数据一起删）"
+        echo "  iLinkWM uninstall [--keep-data] 卸载（默认删除程序与全部数据；--keep-data 保留数据）"
         echo "  iLinkWM admin ...          其余参数原样传给 ilink-wm1"
+        echo "  ilink-wm1 ...              二进制直通命令（同在 PATH）：ilink-wm1 --version / admin ..."
         ;;
     *)
         [[ -x "\$BIN" ]] || { echo "[iLinkWM] 未找到 ilink-wm1，请重新安装。" >&2; exit 1; }
@@ -282,7 +283,21 @@ UNIT
 esac
 EOF
     chmod +x "$SHIM"
-    success "命令入口：$SHIM"
+
+    # ilink-wm1 直通命令：任意终端 ilink-wm1 --version / ilink-wm1 admin ...
+    cat > "$BIN_DIR/ilink-wm1" <<'EXESHIM'
+#!/usr/bin/env bash
+# ilink-wm1 直通命令（由安装器生成）：等价直接运行二进制
+set -euo pipefail
+APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="$APP_ROOT/ilink-wm1"
+[[ -x "$BIN" ]] || { echo "[ilink-wm1] 未找到 $BIN，请重新安装 iLinkWM。" >&2; exit 1; }
+cd "$APP_ROOT"
+export ILINK_DATA_DIR="${ILINK_DATA_DIR:-$APP_ROOT/data}"
+exec "$BIN" "$@"
+EXESHIM
+    chmod +x "$BIN_DIR/ilink-wm1"
+    success "命令入口：$SHIM、$BIN_DIR/ilink-wm1"
 }
 
 ensure_path() {

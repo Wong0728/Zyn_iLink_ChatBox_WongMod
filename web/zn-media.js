@@ -604,8 +604,12 @@
             el.removeAttribute('data-loading');
         } else if (mediaType === "voice") {
             // 语音需要 fetch 为 blob 才能播放
-            var durText = el.querySelector('.bubble-media-voice-dur') ? el.querySelector('.bubble-media-voice-dur').textContent : "";
-            var barsHtml = el.querySelector('.bubble-media-voice-bars') ? el.querySelector('.bubble-media-voice-bars').innerHTML : "";
+            // L-18：不再以 innerHTML 字符串回读再拼接（二阶注入面），
+            //   改为克隆原有节点，完成后以 DOM 节点方式放回。
+            var durNode = el.querySelector('.bubble-media-voice-dur');
+            var barsNode = el.querySelector('.bubble-media-voice-bars');
+            var durClone = durNode ? durNode.cloneNode(true) : null;
+            var barsClone = barsNode ? barsNode.cloneNode(true) : null;
             el.innerHTML = '<div class="bubble-media-placeholder bubble-media-loading-inner"><div class="bubble-media-spinner"></div><span>语音加载中...</span></div>';
             fetch(webdavUrl).then(function(r) {
                 _checkFetchAuth(r, failLabelFor.voice || "语音加载失败");
@@ -627,7 +631,17 @@
                 el.removeAttribute('data-loading');
                 el.setAttribute('data-action', 'play-voice');
                 el.setAttribute('data-cache-id', blobUrl);
-                el.innerHTML = _svgVoice + '<div class="bubble-media-voice-bars">' + barsHtml + '</div><div class="bubble-media-voice-dur">' + durText + '</div><div class="bubble-media-voice-progress"><div class="bubble-media-voice-progress-fill"></div></div></div>';
+                // L-18：骨架用 innerHTML 重建（纯静态字符串），回读内容以节点方式放回
+                el.innerHTML = _svgVoice + '<div class="bubble-media-voice-bars"></div><div class="bubble-media-voice-dur"></div><div class="bubble-media-voice-progress"><div class="bubble-media-voice-progress-fill"></div></div></div>';
+                var barsTarget = el.querySelector('.bubble-media-voice-bars');
+                var durTarget = el.querySelector('.bubble-media-voice-dur');
+                if (barsClone && barsTarget) {
+                    while (barsClone.firstChild) barsTarget.appendChild(barsClone.firstChild);
+                }
+                if (durTarget) {
+                    // textContent 赋值是安全写入，不解析 HTML
+                    durTarget.textContent = durClone ? durClone.textContent : "";
+                }
             }).catch(function(err) {
                 // FIX H2 (2026-07-20): 元素可能已脱离 DOM
                 if (!document.body.contains(el)) return;

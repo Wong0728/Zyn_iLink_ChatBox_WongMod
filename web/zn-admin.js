@@ -137,7 +137,10 @@ var _botStateLabel = function(s) {
   if (s.has_bot) {
     var label = s.session_state === "active" ? "正常" : (s.session_state === "session_expired" ? "已过期" : "离线");
     var cls = s.session_state === "active" ? "badge-active" : "badge-disabled";
-    return '<span class="badge ' + cls + '">' + label + ' (' + (s.contacts_total || 0) + ')</span>';
+    // L-18：contacts_total 强制数值化，防御异常数据注入 HTML
+    var contacts = parseInt(s.contacts_total, 10);
+    if (isNaN(contacts) || contacts < 0) contacts = 0;
+    return '<span class="badge ' + cls + '">' + label + ' (' + contacts + ')</span>';
   }
   return '<span class="badge badge-disabled">未绑定</span>';
 };

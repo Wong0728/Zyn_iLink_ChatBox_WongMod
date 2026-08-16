@@ -34,6 +34,15 @@
 - 版本号自 `3.1.9-wm1.0` 提升至 `3.2.4-wm1.0`（`Cargo.toml`、`src/config.rs`）。
 - 落地页开源协议标注由 MIT 更正为 Apache-2.0（与 LICENSE 文件一致）。
 
+### 第三轮（2026-08-17）：低危清零 + 命令行增强
+
+**安全**：L-1 ~ L-24 全部处理完毕（修复 18、随前轮连带修复 2、协议/架构约束经评估接受 4：L-1 / L-5 / L-6 / L-22），逐项明细见《安全审计报告_2026-08-16.md》〇章第三轮速览。要点：token 线程标识 SHA-256 化（L-3）、webhook 投递前 DNS 钉扎（L-4）、迁移跳过表落盘报告（L-8）、导出文件名消毒（L-9）、`ILINK_FFMPEG_PATH` 钉死 ffmpeg（L-10）、删除用户失败不再吞错（L-11）、登录/注册 Origin 校验（L-12）、voice 上传修复（L-13）、内部错误不外泄（L-14）、审计 JSON serde 转义（L-15）、CSP 补 object-src（L-16）、外链 scheme 二次校验（L-17）、前端三处防御（L-18）、`ILINK_OWNER_PASSWORD_FILE`（L-19）、消息正文默认不落日志（L-20）、cf Token 密文输入（L-21）、并发撞名友好报错（L-23）、遗留 Python 隔离至 `reference/`（L-24）。
+
+**命令行**：
+
+- `ilink-wm1` 与 `iLinkWM` 一同装入 PATH：任意终端直接 `ilink-wm1 --version`、`ilink-wm1 admin ...`（等价直接调用 EXE）。
+- `iLinkWM uninstall` 语义变更：**默认一条命令删除程序与全部数据**（有确认提示）；需要保留数据改用 `iLinkWM uninstall --keep-data`（原 `--purge` 语义并入默认）。
+
 ---
 
 ## 与原版（Zyn iLink ChatBox Python 版）的差异

@@ -188,12 +188,12 @@ sc query ilink-wm1
 exit /b 0
 
 :uninstall
-set "PURGE=%~2"
+set "MODE=%~2"
 set "CONFIRM=N"
-if /i not "%PURGE%"=="--purge" (
-    set /p CONFIRM=卸载 iLinkWM？（数据目录将被保留；输入 Y 确认）: 
+if /i "%MODE%"=="--keep-data" (
+    set /p CONFIRM=卸载 iLinkWM？（数据目录将保留；输入 Y 确认）: 
 ) else (
-    set CONFIRM=Y
+    set /p CONFIRM=卸载 iLinkWM 并删除程序与全部数据？输入 Y 确认（保留数据请用 --keep-data）: 
 )
 if /i not "%CONFIRM%"=="Y" ( echo [iLinkWM] 已取消。 & exit /b 0 )
 echo [iLinkWM] 正在卸载...
@@ -202,12 +202,15 @@ if exist "%APP_ROOT%\bin\nssm.exe" (
     "%APP_ROOT%\bin\nssm.exe" remove ilink-wm1 confirm >nul 2>&1
 )
 powershell -NoProfile -Command "$b='BINDIR'; $p=[Environment]::GetEnvironmentVariable('Path','User'); $new=($p -split ';' | Where-Object { $_ -and $_ -ne $b }) -join ';'; [Environment]::SetEnvironmentVariable('Path',$new,'User')"
-if /i "%PURGE%"=="--purge" (
-    rd /s /q "%APP_ROOT%" 2>nul
-    echo [iLinkWM] 已卸载（含数据目录）。
-) else (
-    powershell -NoProfile -Command "Remove-Item -Recurse -Force 'INSTALLROOT\web','INSTALLROOT\ilink-wm1.exe','INSTALLROOT\bin' -ErrorAction SilentlyContinue"
+if /i "%MODE%"=="--keep-data" (
+    powershell -NoProfile -Command "Remove-Item -Recurse -Force 'INSTALLROOT\web','INSTALLROOT\ilink-wm1.exe','INSTALLROOT\bin','INSTALLROOT\logs' -ErrorAction SilentlyContinue"
     echo [iLinkWM] 已卸载（数据目录保留在 DATADIR，需要时手动删除）。
+) else (
+    echo [iLinkWM] 已卸载（程序与数据目录 DATADIR 将在 2 秒后全部删除）。
+    > "%TEMP%\ilinkwm_uninstall.cmd" echo @timeout /t 2 /nobreak ^>nul
+    >>"%TEMP%\ilinkwm_uninstall.cmd" echo @rd /s /q "%APP_ROOT%"
+    >>"%TEMP%\ilinkwm_uninstall.cmd" echo @del "%%~f0"
+    start "" /min "%TEMP%\ilinkwm_uninstall.cmd"
 )
 echo [iLinkWM] 请关闭并重开终端使 PATH 变更生效。
 exit /b 0
@@ -220,8 +223,9 @@ echo   iLinkWM install-service     注册 Windows 服务（NSSM，需管理员�
 echo   iLinkWM uninstall-service   移除 Windows 服务（需管理员）
 echo   iLinkWM service start^|stop  启停服务（需管理员）；其余参数查询状态
 echo   iLinkWM update              更新到最新版本
-echo   iLinkWM uninstall [--purge] 卸载（--purge 连数据一起删）
+echo   iLinkWM uninstall [--keep-data] 卸载；默认删除程序与全部数据，--keep-data 保留数据
 echo   iLinkWM admin ...           其余参数原样传给 ilink-wm1
+echo   ilink-wm1 ...               二进制直通命令（同在 PATH）：ilink-wm1 --version / admin ...
 exit /b 0
 '@
     # 展开真实路径/URL 占位符（避免正则元字符，用 .Replace）
@@ -232,7 +236,25 @@ exit /b 0
     $shim = $shim.Replace('APPROOTRELSLASH', ($InstallRoot + '\bin'))
     # UTF-8 无 BOM：cmd.exe 逐行解析，首行 chcp 65001 后中文正常
     [IO.File]::WriteAllText($cmdPath, $shim, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Ok "命令入口：$cmdPath"
+
+    # ilink-wm1 直通命令：任意终端 ilink-wm1 --version / ilink-wm1 admin ...
+    $exeShimPath = Join-Path $BinDir 'ilink-wm1.cmd'
+    $exeShim = @'
+@echo off
+chcp 65001 >nul
+setlocal EnableExtensions
+set "APP_ROOT=%~dp0.."
+if not exist "%APP_ROOT%\ilink-wm1.exe" (
+    echo [ilink-wm1] 未找到 ilink-wm1.exe，请重新安装 iLinkWM。
+    exit /b 1
+)
+cd /d "%APP_ROOT%"
+if "%ILINK_DATA_DIR%"=="" set "ILINK_DATA_DIR=%APP_ROOT%\data"
+"%APP_ROOT%\ilink-wm1.exe" %*
+exit /b %errorlevel%
+'@
+    [IO.File]::WriteAllText($exeShimPath, $exeShim, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Ok "命令入口：$cmdPath、$exeShimPath"
 }
 
 function Add-UserPath {

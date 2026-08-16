@@ -8,19 +8,20 @@
 |------|------|
 | `iLinkWM` | 启动程序（首次运行进入初始化向导：绑定地址、创建 owner、站点名、邀请码等） |
 | `iLinkWM admin ...` | 其余参数原样传给 `ilink-wm1`（如 `admin user list`、`admin config set`） |
+| `ilink-wm1 ...` | 二进制直通命令（与 iLinkWM 同在 PATH）：任意终端 `ilink-wm1 --version`、`ilink-wm1 admin ...` |
 | `iLinkWM install-service` | 注册系统服务（Windows: NSSM 服务；Linux: systemd，root 为系统级、普通用户为用户级） |
 | `iLinkWM uninstall-service` | 移除系统服务 |
 | `iLinkWM service start/stop/restart/status` | 服务启停与状态（Windows 需管理员） |
 | `iLinkWM update` | 更新到最新版本（重新执行安装器，保留数据目录） |
-| `iLinkWM uninstall [--purge]` | 卸载；默认保留 `data/` 数据目录，`--purge` 连数据一起删除（有确认提示） |
+| `iLinkWM uninstall [--keep-data]` | 卸载；**默认一条命令删除程序与全部数据目录**（有确认提示），`--keep-data` 仅删程序保留 `data/` |
 
 安装位置：
 
-| 平台 | 程序目录 | 命令入口 | 数据目录 |
+| 平台 | 程序目录 | 命令入口（均在 PATH） | 数据目录 |
 |------|----------|----------|----------|
-| Windows | `%LOCALAPPDATA%\Programs\iLinkWM` | `...\iLinkWM\bin\iLinkWM.cmd`（自动加入用户 PATH） | `...\iLinkWM\data` |
-| Linux / macOS | `~/.local/share/iLinkWM` | `~/.local/bin/iLinkWM` | `~/.local/share/iLinkWM/data` |
-| Termux | `$PREFIX/share/iLinkWM` | `$PREFIX/bin/iLinkWM` | `$PREFIX/share/iLinkWM/data` |
+| Windows | `%LOCALAPPDATA%\Programs\iLinkWM` | `...\iLinkWM\bin\`（`iLinkWM.cmd` + `ilink-wm1.cmd`，自动加入用户 PATH） | `...\iLinkWM\data` |
+| Linux / macOS | `~/.local/share/iLinkWM` | `~/.local/bin/`（`iLinkWM` + `ilink-wm1`） | `~/.local/share/iLinkWM/data` |
+| Termux | `$PREFIX/share/iLinkWM` | `$PREFIX/bin/`（`iLinkWM` + `ilink-wm1`） | `$PREFIX/share/iLinkWM/data` |
 
 ## 一键安装
 

@@ -42,6 +42,15 @@ pub(crate) fn safe_truncate(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 
+/// L-3：token 在线程名/日志中的短标识。改为 SHA-256 前 8 位 hex（不可逆），
+/// 避免把 token 明文前缀暴露给 crash dump / tasklist / 日志文件。
+pub(crate) fn token_tag(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(token.as_bytes());
+    hex::encode(&h.finalize()[..4])
+}
+
 /// S32: 简单的计数信号量（基于 std::sync::Mutex + Condvar）
 ///   用于限制 spawn_retry_send 并发数，避免 outbound-scan 批量恢复时
 ///   瞬间 spawn 大量长时间（最长 380s+）的发送线程导致线程爆炸
@@ -1506,7 +1515,14 @@ impl WeChatiLinkBot {
         // 消息文本内容降级为 debug，避免 INFO 日志泄露对话内容；
         //   保留 "收到消息" 事件为 info，满足 M15 排障需求且不暴露敏感文本。
         tracing::info!("[RECV] 收到来自 {} 的消息", from_user);
-        tracing::debug!("[RECV] 消息文本: {}", safe_truncate(&text, 80));
+        // L-20：消息正文不再默认写入日志（原为 debug 级前 80 字符明文）。
+        //   排障确需查看时显式设置 ILINK_LOG_MESSAGE_CONTENT=1，且仅 debug 级输出。
+        if std::env::var("ILINK_LOG_MESSAGE_CONTENT")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
+            tracing::debug!("[RECV] 消息文本(显式开启): {}", safe_truncate(&text, 80));
+        }
         for mi in &media_list {
             let mt = mi.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
             let fname = mi.get("filename").and_then(|v| v.as_str()).unwrap_or("");
@@ -3640,7 +3656,9 @@ impl WeChatiLinkBot {
         let bot = self.clone();
         let bot_token = bot_token.to_string();
         let account = account.clone();
-        let token_short = safe_truncate(&bot_token, 16).to_string();
+        // L-3：token 标识改用 SHA-256 前 8 hex（不可逆），不再把 token 明文前缀
+        //      暴露给线程名（crash dump / tasklist 可见）与日志。
+        let token_short = token_tag(&bot_token);
 
         // S45: 创建/重置该 token 的 cancel flag
         //   reauth 路径会设置旧 token 的 flag=true，旧 poll 线程在循环顶部检测后退出；
@@ -4123,7 +4141,7 @@ impl WeChatiLinkBot {
                                 // reauth 路径：保留 bot_id / user_id，只刷新 token
                                 tracing::info!("[REAUTH] 重新扫码成功，覆盖主 token");
                                 let old_token = bot.token.read().clone().unwrap_or_default();
-                                let old_token_short = safe_truncate(&old_token, 16).to_string();
+                                let old_token_short = token_tag(&old_token);
                                 *bot.token.write() = Some(new_token.clone());
                                 *bot.session_status.write() = SessionState::Active;
 

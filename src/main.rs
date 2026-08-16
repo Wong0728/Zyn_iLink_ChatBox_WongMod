@@ -199,12 +199,31 @@ fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Op
         //   ⚠ ILINK_OWNER_PASSWORD 明文存于环境变量，需通过 systemd LoadCredential / Docker
         //   secret / .env 文件（chmod 600）等机制保护，勿直接写入 shell history。
         //   ⚠ 读取后立即用，不写入日志、不回显。
+        //   L-19：更推荐 ILINK_OWNER_PASSWORD_FILE（配合 systemd LoadCredential=... 落盘
+        //   0600 凭据文件），避免明文进进程环境（/proc/<pid>/environ 可读）。
         let env_owner_user = std::env::var("ILINK_OWNER_USER")
             .ok()
             .filter(|s| !s.is_empty());
         let env_owner_pass = std::env::var("ILINK_OWNER_PASSWORD")
             .ok()
-            .filter(|s| !s.is_empty());
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                // L-19：优先文件注入路径（读首行、去尾部换行）；文件不可读时明确报错
+                std::env::var("ILINK_OWNER_PASSWORD_FILE")
+                    .ok()
+                    .filter(|p| !p.is_empty())
+                    .map(|p| {
+                        std::fs::read_to_string(&p)
+                            .map(|c| c.trim_end_matches(['\r', '\n']).to_string())
+                            .map_err(|e| {
+                                println!("  ✗ ILINK_OWNER_PASSWORD_FILE 读取失败 ({}): {}", p, e);
+                                e
+                            })
+                            .ok()
+                            .filter(|c| !c.is_empty())
+                    })
+                    .flatten()
+            });
 
         // 用户名
         let username = if let Some(u) = env_owner_user.as_ref() {
@@ -756,6 +775,15 @@ fn settings_menu(
 async fn main() {
     // Termux 兼容
     config::setup_termux_compat();
+
+    // L-2：明文回退开关开启时启动即告警（该开关仅限升级迁移兜底，默认严格拒绝）
+    if std::env::var("ILINK_ALLOW_PLAINTEXT_FALLBACK")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
+        eprintln!("[WARN] ILINK_ALLOW_PLAINTEXT_FALLBACK 已开启：敏感数据允许明文兼容回退。");
+        eprintln!("[WARN] 请在重新保存相关配置（WebDAV 密码等）后立即移除该环境变量。");
+    }
 
     // 初始化日志
     let server_mode = is_server_mode();

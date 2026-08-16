@@ -1,7 +1,7 @@
 name: Release
 
 # 推送 v* 标签时触发：多平台编译 + 自动打包 + 创建 GitHub Release
-# 供 deploy/ 下的一键安装脚本（iLinkWM）下载使用。
+# 供 deploy/ 下的一键安装脚本（iLinkWM / ilink-wm1）下载使用。
 on:
   push:
     tags:
@@ -48,26 +48,33 @@ jobs:
         shell: bash
         run: |
           VER="${GITHUB_REF_NAME#v}"
-          STAGE="stage/ilink_wm_v${VER}_${{ matrix.zip_suffix }}"
+          STAGE="stage"
           mkdir -p "$STAGE"
           cp "target/release/${{ matrix.binary }}" "$STAGE/"
           cp -r web "$STAGE/"
-          cp LICENSE README.md CHANGELOG.md start.bat install-service.bat 用户协议.md 部署指南.md "$STAGE/" 2>/dev/null || true
-          cd stage && zip -r "../ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip" . && cd ..
+          cp LICENSE README.md CHANGELOG.md 用户协议.md 部署指南.md "$STAGE/"
+          if [[ "${{ matrix.name }}" == "windows-x64" ]]; then
+            cp start.bat install-service.bat "$STAGE/"
+          fi
+          cd "$STAGE"
+          OUT="../ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip"
+          if command -v zip >/dev/null 2>&1; then
+            zip -r "$OUT" .
+          elif [ -x "/c/Program Files/7-Zip/7z.exe" ]; then
+            # windows runner 的 Git Bash 无 zip 命令，用预装 7-Zip
+            "/c/Program Files/7-Zip/7z.exe" a -tzip "$OUT" .
+          else
+            echo "no zip tool available" >&2; exit 1
+          fi
+          cd ..
           sha256sum "ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip" > "ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip.sha256"
 
-      - name: Create source zip (windows-x64 only)
-        if: matrix.name == 'windows-x64'
+      - name: Package source zip (linux-x64 only)
+        if: matrix.name == 'linux-x64'
         shell: bash
         run: |
-          VER="${GITHUB_REF_NAME#v}"
-          STAGE="src_stage/ilink_wm_v${VER}_src"
-          mkdir -p "$STAGE"
-          cp -r src web "$STAGE/"
-          cp Cargo.toml Cargo.lock LICENSE README.md CHANGELOG.md start.bat install-service.bat 代码规范.md 用户协议.md 部署指南.md "$STAGE/" 2>/dev/null || true
-          cp deploy/linux/install-server.sh "$STAGE/install.sh"
-          cd src_stage && zip -r "../ilink_wm_v${VER}_src.zip" . && cd ..
-          sha256sum "ilink_wm_v${VER}_src.zip" > "ilink_wm_v${VER}_src.zip.sha256"
+          python3 deploy/package.py --skip-exe
+          mv 分发/*.zip 分发/*.sha256 .
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
