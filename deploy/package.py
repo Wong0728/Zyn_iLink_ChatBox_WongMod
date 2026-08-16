@@ -75,12 +75,16 @@ def main():
                 add_file(zf, ROOT / f)
         print(f"[package] {win_zip.name}（{win_zip.stat().st_size/1024/1024:.1f} MB）")
 
-    # ── SHA-256 清单 ──────────────────────────────────────
+    # ── SHA-256 清单（总表 + 每个 zip 的 .sha256 边车，供 CI 与用户校验）──
     manifest = DIST / "SHA256SUMS.txt"
-    with manifest.open("w", encoding="utf-8", newline="\n") as f:
-        for z in sorted(DIST.glob("*.zip")):
-            h = hashlib.sha256(z.read_bytes()).hexdigest()
-            f.write(f"{h}  {z.name}\n")
+    lines = []
+    for z in sorted(DIST.glob("*.zip")):
+        h = hashlib.sha256(z.read_bytes()).hexdigest()
+        lines.append(f"{h}  {z.name}")
+        sidecar = z.with_suffix(z.suffix + ".sha256")
+        sidecar.write_text(f"{h}  {z.name}\n", encoding="utf-8", newline="\n")
+        print(f"[package] {sidecar.name}")
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     print(f"[package] 校验清单 → {manifest}")
 
 

@@ -26,3 +26,6 @@ __pycache__/
 scripts/cf-config.json
 scripts/cf-ddns.log
 
+
+# Per-zip checksum sidecars (generated)
+*.sha256
