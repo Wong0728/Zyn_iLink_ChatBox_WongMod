@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>管理面板 · Zyn iLink ChatBox · WongMod</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+/* ── Admin Layout ──────────────────────────────────── */
+.admin-app {
+  display: flex;
+  height: 100vh; height: 100dvh;
+  background: var(--chat-bg);
+  transition: background 0.5s var(--ease-out), color 0.5s var(--ease-out);
+}
+
+/* Sidebar nav */
+.admin-nav {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-color);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  display: flex;
+  flex-direction: column;
+  padding-top: 16px;
+  overflow-y: auto;
+}
+
+.admin-nav-header {
+  padding: 8px 16px 16px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+
+.admin-nav-header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.admin-nav-header .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  margin-top: 6px;
+  transition: color 0.2s;
+}
+.admin-nav-header .back-link:hover { color: var(--accent); }
+
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+}
+
+.admin-nav-item:hover {
+  color: var(--text-primary);
+  background: var(--accent-light);
+}
+
+.admin-nav-item.active {
+  color: var(--accent);
+  background: var(--accent-light);
+  font-weight: 600;
+}
+
+.admin-nav-item svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Main content */
+.admin-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  flex-shrink: 0;
+}
+
+.admin-topbar-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.admin-topbar-user {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-topbar-user .user-role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--chat-bg);
+}
+
+/* Section panels */
+.admin-section { display: none; }
+.admin-section.active { display: block; }
+
+.admin-section-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+/* Cards */
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-card-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-card-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -0.03em;
+}
+
+/* Tables */
+.admin-table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-table thead {
+  background: var(--bg-secondary);
+}
+
+.admin-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 10px 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tr:hover td {
+  background: var(--accent-light);
+}
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-active, .badge-enabled, .badge-owner, .badge-admin {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.badge-disabled, .badge-revoked, .badge-user {
+  background: rgba(142,142,147,0.15);
+  color: var(--text-secondary);
+}
+
+.badge-banned {
+  background: rgba(255,59,48,0.15);
+  color: #FF3B30;
+}
+
+/* Action buttons */
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  white-space: nowrap;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.action-btn.danger {
+  color: #FF3B30;
+  border-color: rgba(255,59,48,0.2);
+}
+
+.action-btn.danger:hover {
+  background: rgba(255,59,48,0.1);
+  border-color: #FF3B30;
+}
+
+.action-btn.primary {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.action-btn.primary:hover {
+  background: var(--accent);
+  color: #000;
+}
+
+/* Inline form row */
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.inline-form input, .inline-form select {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.inline-form input:focus, .inline-form select:focus {
+  border-color: var(--accent);
+}
+
+.inline-form input::placeholder {
+  color: var(--text-hint);
+}
+
+.inline-form label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* KV list for settings */
+.kv-list {
+  display: grid;
+  gap: 8px;
+}
+
+.kv-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.kv-key {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  min-width: 160px;
+  font-family: var(--font-mono, monospace);
+}
+
+.kv-value {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.kv-edit-btn {
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.kv-edit-btn:hover {
+  background: var(--accent-light);
+}
+
+/* Audit log */
+.audit-msg {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .admin-nav {
+    position: fixed;
+    left: -220px;
+    top: 0;
+    bottom: 0;
+    z-index: 100;
+    transition: left 0.3s var(--ease-out);
+  }
+  .admin-nav.open { left: 0; }
+
+  .admin-nav-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 99;
+  }
+  .admin-nav-overlay.show { display: block; }
+
+  .admin-topbar {
+    padding: 12px 16px;
+  }
+
+  .admin-content {
+    padding: 16px;
+  }
+
+  .stat-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-table-wrap {
+    overflow-x: auto;
+  }
+
+  .admin-table {
+    min-width: 600px;
+  }
+
+  .kv-key {
+    min-width: 100px;
+  }
+}
+
+/* Loading / empty states */
+.loading-dots::after {
+  content: '';
+  animation: loadingDots 1.2s steps(4) infinite;
+}
+
+@keyframes loadingDots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-hint);
+  font-size: 14px;
+}
+
+/* ── Tunnel Section ──────────────────────────────── */
+.tunnel-tip {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--accent-light);
+  border-radius: 8px;
+}
+.tunnel-tip a { color: var(--accent); text-decoration: underline; }
+.tunnel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tunnel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.tunnel-label {
+  width: 96px;
+  flex-shrink: 0;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.tunnel-input {
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  outline: none;
+}
+.tunnel-input:focus { border-color: var(--accent); }
+.tunnel-toggle {
+  width: 18px; height: 18px;
+  cursor: pointer;
+}
+.tunnel-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--text-hint);
+  flex-shrink: 0;
+}
+.tunnel-dot.running { background: #34c759; }
+.tunnel-dot.stopped { background: var(--text-hint); }
+.tunnel-dot.error { background: #ff3b30; }
+.tunnel-url-text {
+  color: var(--accent);
+  word-break: break-all;
+  font-size: 13px;
+}
+.tunnel-row-static { padding: 4px 0; }
+.tunnel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  margin-bottom: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+.tunnel-status-msg {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: none;
+}
+.tunnel-status-msg.error { display: block; background: rgba(255,59,48,0.1); color: #ff3b30; }
+.tunnel-status-msg.success { display: block; background: rgba(52,199,89,0.1); color: #34c759; }
+.tunnel-status-msg.info { display: block; background: rgba(0,122,255,0.1); color: #007aff; }
+/* B4 fix：日志框使用与面板一致的背景色，避免黑色 terminal 嵌入割裂感。 */
+.tunnel-log-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Edit setting modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.show {
+  display: flex;
+}
+
+.modal-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-box h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.modal-box .modal-field {
+  margin-bottom: 12px;
+}
+
+.modal-box .modal-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.modal-box .modal-field input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+}
+
+.modal-box .modal-field input:focus {
+  border-color: var(--accent);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.modal-actions button {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.modal-actions button.primary {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.modal-actions button.primary:hover {
+  background: var(--accent-hover);
+}
+
+.modal-actions button:hover {
+  border-color: var(--accent);
+}
+
+/* Mobile hamburger */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 4px;
+  margin-right: 8px;
+}
+
+@media (max-width: 768px) {
+  .hamburger-btn { display: inline-flex; align-items: center; }
+}
+</style>
+</head>
+<body>
+<div id="admin-app" class="admin-app">
+
+  <!-- Sidebar overlay for mobile -->
+  <div id="admin-nav-overlay" class="admin-nav-overlay"></div>
+
+  <!-- Sidebar -->
+  <nav class="admin-nav" id="admin-nav">
+    <div class="admin-nav-header">
+      <h1>管理面板</h1>
+      <a href="/" class="back-link">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        返回首页
+      </a>
+    </div>
+    <button class="admin-nav-item active" data-section="users">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      用户管理
+    </button>
+    <button class="admin-nav-item" data-section="invites">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      邀请码
+    </button>
+    <button class="admin-nav-item" data-section="ipbans">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+      IP 封禁
+    </button>
+    <button class="admin-nav-item" data-section="tunnel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20h16a2 2 0 002-2V8a2 2 0 00-2-2h-7.93a2 2 0 01-1.66-.9l-.82-1.2A2 2 0 007.93 3H4a2 2 0 00-2 2v13c0 1.1.9 2 2 2z"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+      内网穿透
+    </button>
+    <button class="admin-nav-item" data-section="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      系统设置
+    </button>
+    <button class="admin-nav-item" data-section="audit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      审计日志
+    </button>
+    <button class="admin-nav-item" data-section="stats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      系统统计
+    </button>
+    <button class="admin-nav-item" data-section="notification">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      全局通知
+    </button>
+  </nav>
+
+  <!-- Main area -->
+  <div class="admin-main">
+    <!-- Top bar -->
+    <div class="admin-topbar">
+      <div style="display:flex;align-items:center;">
+        <button class="hamburger-btn" id="admin-menu-toggle" aria-label="菜单">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <span class="admin-topbar-title" id="admin-topbar-title">用户管理</span>
+      </div>
+      <div class="admin-topbar-user">
+        <span id="admin-current-user"></span>
+        <span class="user-role-badge" id="admin-current-role"></span>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="admin-content">
+
+      <!-- ═══ Users Section ═══ -->
+      <div class="admin-section active" id="section-users">
+        <div class="admin-section-title">用户管理</div>
+        <div class="inline-form">
+          <input type="text" id="create-user-username" placeholder="用户名" maxlength="32" style="width:140px;">
+          <input type="password" id="create-user-password" placeholder="密码" maxlength="128" style="width:160px;">
+          <label>
+            <select id="create-user-role">
+              <option value="user">普通用户</option>
+              <option value="admin">管理员</option>
+            </select>
+          </label>
+          <button class="action-btn primary" id="create-user-btn">创建用户</button>
+        </div>
+        <!-- FIX A2 (2026-07-20): 列表搜索框 -->
+        <!-- FIX A9 (2026-07-20): 批量操作按钮（仅用户列表） -->
+        <div class="inline-form" style="margin-top:8px;flex-wrap:wrap;gap:8px;">
+          <input type="text" id="users-search" placeholder="搜索：用户名/邮箱/UID" style="width:240px;flex:0 0 auto;">
+          <button class="action-btn" id="users-bulk-disable" style="font-size:12px;">批量禁用</button>
+          <button class="action-btn" id="users-bulk-enable" style="font-size:12px;">批量启用</button>
+          <button class="action-btn danger" id="users-bulk-delete" style="font-size:12px;">批量删除</button>
+          <!-- D5 fix：批量选择时显示"已选 N 项"，让用户知道选了什么。 -->
+          <span id="users-selected-count" style="font-size:12px;color:var(--accent);font-weight:600;display:none;"></span>
+          <span id="users-count" style="font-size:12px;color:var(--text-hint);margin-left:auto;"></span>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th style="width:30px;"><input type="checkbox" id="users-select-all"></th>
+                <th>UID</th>
+                <th>用户名</th>
+                <th>角色</th>
+                <th>状态</th>
+                <th>邮箱</th>
+                <th>注册时间</th>
+                <th>上传流量</th>
+                <th>下载流量</th>
+                <th>媒体占用</th>
+                <th>机器人状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="12" style="text-align:center;color:var(--text-hint);padding:40px;">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Invites Section ═══ -->
+      <div class="admin-section" id="section-invites">
+        <div class="admin-section-title">邀请码管理</div>
+        <div class="inline-form">
+          <label>
+            有效期(天):
+            <input type="number" id="invite-days" value="7" min="1" max="365" style="width:72px;">
+          </label>
+          <input type="text" id="invite-note" placeholder="备注(可选)" maxlength="128" style="width:160px;">
+          <button class="action-btn primary" id="create-invite-btn">生成邀请码</button>
+        </div>
+        <!-- FIX A2: 列表搜索框 -->
+        <!-- FIX A9 (2026-07-20): 邀请码批量撤销 -->
+        <div class="inline-form" style="margin-top:8px;">
+          <input type="text" id="invites-search" placeholder="搜索：邀请码/创建者/备注" style="width:240px;flex:0 0 auto;">
+          <button class="action-btn danger" id="invites-bulk-revoke" style="font-size:12px;">批量撤销</button>
+          <span id="invites-count" style="font-size:12px;color:var(--text-hint);"></span>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th style="width:30px;"><input type="checkbox" id="invites-select-all"></th>
+                <th>邀请码</th>
+                <th>创建者</th>
+                <th>创建时间</th>
+                <th>过期时间</th>
+                <th>状态</th>
+                <th>备注</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="invites-tbody">
+              <tr><td colspan="8" style="text-align:center;color:var(--text-hint);padding:40px;">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ IP Bans Section ═══ -->
+      <div class="admin-section" id="section-ipbans">
+        <div class="admin-section-title">IP 封禁管理</div>
+        <div class="inline-form">
+          <input type="text" id="ban-ip" placeholder="IP 地址" style="width:160px;">
+          <input type="text" id="ban-reason" placeholder="封禁原因(可选)" maxlength="128" style="width:180px;">
+          <label>
+            天数:
+            <input type="number" id="ban-days" value="7" min="1" max="3650" style="width:64px;">
+          </label>
+          <button class="action-btn primary" id="ban-ip-btn">封禁 IP</button>
+        </div>
+        <!-- FIX A2: 列表搜索框 -->
+        <!-- FIX A9 (2026-07-20): IP 批量解封 -->
+        <div class="inline-form" style="margin-top:8px;">
+          <input type="text" id="ipbans-search" placeholder="搜索：IP/原因" style="width:240px;flex:0 0 auto;">
+          <button class="action-btn" id="ipbans-bulk-unban" style="font-size:12px;">批量解封</button>
+          <span id="ipbans-count" style="font-size:12px;color:var(--text-hint);"></span>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th style="width:30px;"><input type="checkbox" id="ipbans-select-all"></th>
+                <th>IP 地址</th>
+                <th>封禁原因</th>
+                <th>封禁时间</th>
+                <th>过期时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="ipbans-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-hint);padding:40px;">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Settings Section ═══ -->
+      <div class="admin-section" id="section-settings">
+        <div class="admin-section-title">系统设置</div>
+        <div id="settings-container">
+          <div style="text-align:center;color:var(--text-hint);padding:40px;">加载中...</div>
+        </div>
+      </div>
+
+      <!-- ═══ Audit Section ═══ -->
+      <div class="admin-section" id="section-audit">
+        <div class="admin-section-title">审计日志</div>
+        <!-- FIX A2 (2026-07-20): 搜索框 -->
+        <!-- FIX A3 (2026-07-20): 日期范围筛选 + CSV/JSON 导出 -->
+        <!-- E3 fix：搜索+导出 与 日期范围分两行布局，避免挤压。 -->
+        <div class="inline-form" style="gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="audit-search" placeholder="搜索：用户/操作/IP" style="width:220px;flex:0 0 auto;">
+          <button class="action-btn" id="audit-export-csv">导出 CSV</button>
+          <button class="action-btn" id="audit-export-json">导出 JSON</button>
+          <span id="audit-count" style="font-size:12px;color:var(--text-hint);margin-left:auto;"></span>
+        </div>
+        <div class="inline-form" style="gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+          <label style="font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+            起:
+            <input type="date" id="audit-date-from" style="padding:6px;font-size:13px;border:1px solid var(--border-color);border-radius:6px;background:var(--input-bg);color:var(--text-primary);">
+          </label>
+          <label style="font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+            止:
+            <input type="date" id="audit-date-to" style="padding:6px;font-size:13px;border:1px solid var(--border-color);border-radius:6px;background:var(--input-bg);color:var(--text-primary);">
+          </label>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>用户</th>
+                <th>操作</th>
+                <th>详情</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-hint);padding:40px;">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Stats Section ═══ -->
+      <div class="admin-section" id="section-stats">
+        <div class="admin-section-title">系统统计</div>
+        <div id="stats-container">
+          <div style="text-align:center;color:var(--text-hint);padding:40px;">加载中...</div>
+        </div>
+      </div>
+
+      <!-- ═══ Tunnel Section ═══ -->
+      <div class="admin-section" id="section-tunnel">
+        <div class="admin-section-title">内网穿透</div>
+        <div class="tunnel-warning" style="background:rgba(255,59,48,0.1);border:1px solid #ff3b30;border-radius:8px;padding:12px;margin-bottom:16px;">
+          <div style="font-weight:600;color:#ff3b30;margin-bottom:8px;">⚠ 重要提醒</div>
+          <div style="font-size:13px;color:var(--text-primary);line-height:1.6;">
+            此功能仅适合测试，不建议长期使用。<br>
+            一旦开启内网穿透，管理员界面将无法只在内网访问，公网任何人可通过 URL 访问。<br>
+            如需保证安全，请在后端关闭此功能。
+          </div>
+        </div>
+        <div class="tunnel-tip">
+          通过 <a href="https://serveo.net" target="_blank" rel="noopener">serveo.net</a> SSH 反向隧道将本地服务暴露到公网。
+          连接成功后可在下方查看公网 URL。
+          如需使用自定义域名，请手动配置 frp / cloudflared / SSH 隧道，此处仅记录 URL。
+        </div>
+        <div class="tunnel-form">
+          <label class="tunnel-row">
+            <span class="tunnel-label">状态</span>
+            <span id="tunnel-status-indicator" style="display:flex;align-items:center;gap:6px;">
+              <span class="tunnel-dot" id="tunnel-dot"></span>
+              <span id="tunnel-status-text">检测中...</span>
+            </span>
+          </label>
+          <div id="tunnel-info-area" style="display:none;">
+            <label class="tunnel-row tunnel-row-static">
+              <span class="tunnel-label">公网 URL</span>
+              <span id="tunnel-url" class="tunnel-url-text">-</span>
+            </label>
+            <label class="tunnel-row tunnel-row-static">
+              <span class="tunnel-label">子域名</span>
+              <span id="tunnel-subdomain">-</span>
+            </label>
+            <label class="tunnel-row tunnel-row-static">
+              <span class="tunnel-label">进程 PID</span>
+              <span id="tunnel-pid">-</span>
+            </label>
+          </div>
+          <label class="tunnel-row">
+            <span class="tunnel-label">本地端口</span>
+            <input type="number" id="tunnel-port" class="tunnel-input" value="8888" min="1" max="65535" style="width:100px;" />
+          </label>
+          <label class="tunnel-row">
+            <span class="tunnel-label">远程端口</span>
+            <input type="number" id="tunnel-remote" class="tunnel-input" value="80" min="1" max="65535" style="width:100px;" />
+          </label>
+          <label class="tunnel-row">
+            <span class="tunnel-label">子域名</span>
+            <input type="text" id="tunnel-subdomain-input" class="tunnel-input" placeholder="留空随机分配" style="width:200px;" />
+          </label>
+          <label class="tunnel-row">
+            <span class="tunnel-label">自动重连</span>
+            <input type="checkbox" id="tunnel-reconnect" class="tunnel-toggle" checked />
+          </label>
+        </div>
+        <div class="tunnel-actions">
+          <button type="button" class="action-btn primary" id="tunnel-start-btn">启动隧道</button>
+          <button type="button" class="action-btn danger" id="tunnel-stop-btn" style="display:none;">停止隧道</button>
+        </div>
+        <div id="tunnel-status-msg" class="tunnel-status-msg"></div>
+        <div style="margin-top:16px;">
+          <div class="admin-section-title" style="font-size:14px;">日志</div>
+          <div id="tunnel-log" class="tunnel-log-box"></div>
+        </div>
+      </div>
+
+      <!-- ═══ Notification Section ═══ -->
+      <div class="admin-section" id="section-notification">
+        <div class="admin-section-title">全局通知</div>
+        <div class="inline-form" style="flex-direction:column;align-items:stretch;gap:12px;">
+          <textarea id="notification-message" placeholder="输入通知内容..." rows="3" style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border-color);border-radius:8px;background:var(--input-bg);color:var(--text-primary);resize:vertical;font-family:inherit;outline:none;"></textarea>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;">
+              级别:
+              <select id="notification-level" style="padding:6px 12px;font-size:13px;border:1px solid var(--border-color);border-radius:8px;background:var(--input-bg);color:var(--text-primary);outline:none;">
+                <option value="info">信息</option>
+                <option value="warn">警告</option>
+                <option value="error">错误</option>
+              </select>
+            </label>
+            <button class="action-btn primary" id="notification-send-btn">发送通知</button>
+            <button class="action-btn danger" id="notification-clear-btn">清除通知</button>
+          </div>
+          <div id="notification-status" style="font-size:12px;color:var(--text-hint);"></div>
+        </div>
+      </div>
+
+    </div><!-- /admin-content -->
+  </div><!-- /admin-main -->
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<!-- Edit setting modal -->
+<div class="modal-overlay" id="setting-modal">
+  <div class="modal-box">
+    <h3>编辑设置</h3>
+    <div class="modal-field">
+      <label>键</label>
+      <input type="text" id="setting-edit-key" readonly style="opacity:0.6;">
+    </div>
+    <!-- C3 fix：显示 key 的中文描述，避免管理员要回查文档才知道改的是什么。 -->
+    <div class="modal-field" id="setting-edit-desc-wrap" style="display:none;">
+      <label>说明</label>
+      <div id="setting-edit-desc" style="font-size:13px;color:var(--text-secondary);line-height:1.5;padding:8px 10px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border-color);"></div>
+    </div>
+    <div class="modal-field">
+      <label>值</label>
+      <!-- FIX A4 (2026-07-20): 改为容器，由 zn-admin.js 根据 key 类型动态渲染不同控件
+           （checkbox / number / select / text），避免 "true" vs "1" 混淆。 -->
+      <div id="setting-edit-value-container" style="width:100%;">
+        <input type="text" id="setting-edit-value" placeholder="输入新值" style="width:100%;">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="setting-modal-cancel">取消</button>
+      <button class="primary" id="setting-modal-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>window.__ZN_AUTH_REQUIRED="{{AUTH_REQUIRED}}"</script>
+<script>
+// FIX H-7 (2026-07-18): session_token 不再嵌入 HTML，统一通过 HttpOnly Cookie 传递。
+//   admin 页有自己的登录入口；此处探测 cookie 失效时跳转到 /admin 登录页。
+(function() {
+    if (window.__ZN_AUTH_REQUIRED !== "true") return;
+    var x = new XMLHttpRequest();
+    x.open("GET", "/api/admin/stats", true);
+    x.timeout = 4000;
+    x.onload = function() {
+        if (x.status === 401) { window.location.href = "/admin-login"; }
+    };
+    x.send();
+})();
+</script>
+<script src="/static/zn-site.js"></script>
+<script src="/static/zn-core.js"></script>
+<script src="/static/zn-utils.js"></script>
+<script src="/static/zn-admin.js"></script>
+</body>
+</html>

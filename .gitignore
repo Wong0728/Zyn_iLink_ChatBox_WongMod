@@ -1,0 +1,28 @@
+# Build artifacts
+/target/
+
+# Windows debug / linker artifacts
+*.exe
+*.pdb
+
+# Python cache
+__pycache__/
+
+# HTTP capture
+*.har
+
+# Environment
+.env*
+!.env.example
+
+# Logs
+*.log
+
+# Distribution packages (generated, not source)
+*.zip
+
+
+# Cloudflare setup secrets (cf-setup)
+scripts/cf-config.json
+scripts/cf-ddns.log
+

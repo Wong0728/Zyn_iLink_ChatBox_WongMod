@@ -1,0 +1,91 @@
+[package]
+name = "ilink-wm1"
+version = "3.2.4"
+edition = "2021"
+authors = ["ZynSync (original) / Mr.Wong (Rust port)"]
+
+[[bin]]
+name = "ilink-wm1"
+path = "src/main.rs"
+
+[dependencies]
+# Web framework
+axum = { version = "0.7", features = ["multipart", "macros", "ws"] }
+tower-http = { version = "0.6", features = ["cors", "fs", "set-header"] }
+
+# CLI 子命令分发（Phase 1 Wave 3：admin 管理命令）
+clap = { version = "4", features = ["derive"] }
+
+# Async runtime
+# FIX F-3 (2026-07-18): 启用 signal feature 以支持 SIGINT/SIGTERM 优雅关闭
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net", "signal"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "gzip", "blocking"] }
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Crypto
+aes = "0.8"
+aes-gcm = "0.10"
+pbkdf2 = "0.12"
+sha2 = "0.10"
+hmac = "0.12"
+md-5 = "0.10"
+rand = "0.8"
+base64 = "0.22"
+hex = "0.4"
+
+# QR code
+qrcode = "0.14"
+
+# UUID
+uuid = { version = "1", features = ["v4"] }
+
+# URL encoding
+percent-encoding = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+
+# Time
+chrono = "0.4"
+
+# HTML escaping
+html-escape = "0.2"
+
+# Other utilities
+once_cell = "1"
+parking_lot = "0.12"
+anyhow = "1"
+thiserror = "1"
+futures = "0.3"
+url = "2"
+crossbeam-channel = "0.5"
+sysinfo = "0.31"
+
+# 终端密码掩码（直接调用 Win32/termios，替代 rpassword）
+# JobObjects/Threading：内网穿透 ssh 子进程挂入 KILL_ON_JOB_CLOSE Job Object
+[target.'cfg(windows)'.dependencies]
+# Win32_Security_Cryptography: DPAPI（CryptProtectData）包装主密钥文件（审计 M-7）
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security_Cryptography"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+panic = "abort"
+overflow-checks = true
+
+[profile.dev.package."*"]
+opt-level = 1

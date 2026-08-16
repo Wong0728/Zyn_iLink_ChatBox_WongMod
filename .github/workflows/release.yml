@@ -1,0 +1,78 @@
+name: Release
+
+# 推送 v* 标签时触发：多平台编译 + 自动打包 + 创建 GitHub Release
+# 供 deploy/ 下的一键安装脚本（iLinkWM）下载使用。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            binary: ilink-wm1.exe
+            zip_suffix: win_x64
+          - name: linux-x64
+            os: ubuntu-latest
+            binary: ilink-wm1
+            zip_suffix: linux_x86_64
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            binary: ilink-wm1
+            zip_suffix: linux_aarch64
+          - name: macos-arm64
+            os: macos-latest
+            binary: ilink-wm1
+            zip_suffix: macos_aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Package binary zip
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          STAGE="stage/ilink_wm_v${VER}_${{ matrix.zip_suffix }}"
+          mkdir -p "$STAGE"
+          cp "target/release/${{ matrix.binary }}" "$STAGE/"
+          cp -r web "$STAGE/"
+          cp LICENSE README.md CHANGELOG.md start.bat install-service.bat 用户协议.md 部署指南.md "$STAGE/" 2>/dev/null || true
+          cd stage && zip -r "../ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip" . && cd ..
+          sha256sum "ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip" > "ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip.sha256"
+
+      - name: Create source zip (windows-x64 only)
+        if: matrix.name == 'windows-x64'
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          STAGE="src_stage/ilink_wm_v${VER}_src"
+          mkdir -p "$STAGE"
+          cp -r src web "$STAGE/"
+          cp Cargo.toml Cargo.lock LICENSE README.md CHANGELOG.md start.bat install-service.bat 代码规范.md 用户协议.md 部署指南.md "$STAGE/" 2>/dev/null || true
+          cp deploy/linux/install-server.sh "$STAGE/install.sh"
+          cd src_stage && zip -r "../ilink_wm_v${VER}_src.zip" . && cd ..
+          sha256sum "ilink_wm_v${VER}_src.zip" > "ilink_wm_v${VER}_src.zip.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.zip
+            *.sha256
+          generate_release_notes: true

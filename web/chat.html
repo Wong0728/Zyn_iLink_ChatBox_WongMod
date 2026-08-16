@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="referrer" content="no-referrer">
+<title>Zyn iLink ChatBox · WongMod</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+    <div id="login-page" class="login-container" style="display:none">
+        <div class="login-header">
+            <h1>ZynWechat · WongMod</h1>
+            <p>微信官方接口 · 扫码连接</p>
+        </div>
+        <div class="qr-container">
+            <div id="qr-loading" class="loading-spinner"></div>
+            <div id="qr-code"></div>
+            <div id="status-text" class="status-text">正在获取二维码...</div>
+        </div>
+        <div id="qr-account-info" class="qr-account-info" style="display:none;text-align:center;margin-top:12px;font-size:12px;color:var(--text-hint);">
+            已有绑定账号 · <a href="javascript:void(0)" id="qr-switch-account-link" style="color:var(--accent);">切换账号</a>
+        </div>
+    </div>
+    <div id="chat-list-page" class="chat-list-container">
+        <div class="chat-list-header">
+            <span class="chat-list-header-title">Zyn iLink Chatbox · WongMod</span>
+            <span id="current-user-pill" class="current-user-pill" style="display:none;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg-input,rgba(0,0,0,0.06));color:var(--text-secondary);margin-left:8px;"></span>
+        </div>
+        <div id="conn-status-bar-list" class="conn-status-bar"></div>
+        <div id="global-notification-bar" class="global-notification-bar" style="display:none"></div>
+        <div id="chat-list-items" class="chat-list-items">
+            <div class="chat-list-empty">
+                <div class="chat-list-empty-icon"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+                <div>暂无聊天</div>
+            </div>
+        </div>
+    </div>
+    <div id="chat-page" class="chat-container">
+        <div class="chat-header">
+            <button id="chat-back-btn" class="chat-back-btn" aria-label="返回"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span id="chat-header-title" class="chat-header-title"></span>
+            <div class="chat-header-menu-wrap">
+                <button id="chat-menu-btn" class="chat-header-menu-btn" aria-label="菜单"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+                <div id="chat-menu-dropdown" class="chat-menu-dropdown">
+                    <div class="chat-menu-item" id="chat-menu-nickname">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <span>设置备注名</span>
+                    </div>
+                    <div class="chat-menu-item" id="chat-menu-export">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span>导出聊天记录</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="conn-status-bar-chat" class="conn-status-bar"></div>
+        <div id="global-notification-bar-chat" class="global-notification-bar" style="display:none"></div>
+        <div id="messages-area" class="messages-area" role="log" aria-label="聊天消息区域">
+            <div class="empty-state">
+                <div class="empty-state-icon"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+                <div>点击媒体消息可查看/下载</div>
+            </div>
+        </div>
+        <div class="input-area">
+            <button id="plus-btn" class="plus-button" aria-label="附件"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <input type="text" id="message-input" class="message-input" placeholder="输入消息..." />
+            <button id="send-btn" class="send-button" aria-label="发送"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+        </div>
+        <div id="media-panel" class="media-panel">
+            <div class="media-panel-inner">
+                <div class="media-option" id="media-photo" role="button" tabindex="0" aria-label="照片">
+                    <div class="media-option-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
+                    <div class="media-option-label">相册</div>
+                </div>
+                <div class="media-option" id="media-camera" role="button" tabindex="0" aria-label="相机">
+                    <div class="media-option-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+                    <div class="media-option-label">拍摄</div>
+                </div>
+                <div class="media-option" id="media-video" role="button" tabindex="0" aria-label="视频">
+                    <div class="media-option-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>
+                    <div class="media-option-label">视频</div>
+                </div>
+                <div class="media-option" id="media-file" role="button" tabindex="0" aria-label="文件">
+                    <div class="media-option-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+                    <div class="media-option-label">文件</div>
+                </div>
+            </div>
+        </div>
+        <input type="file" id="file-photo" accept="image/*" style="display:none" />
+        <input type="file" id="file-camera" accept="image/*" capture="environment" style="display:none" />
+        <input type="file" id="file-video" accept="video/*" style="display:none" />
+        <input type="file" id="file-video-capture" accept="video/*" capture="environment" style="display:none" />
+        <input type="file" id="file-doc" accept="*/*" style="display:none" />
+    </div>
+    <div id="user-list-page" class="user-list-page">
+        <div class="user-list-header">
+            <span class="user-list-header-title">用户列表</span>
+            <button id="user-list-add-btn" class="user-list-add-btn"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        </div>
+        <div class="user-list-scroll">
+            <div class="user-list-body" id="user-mgmt-list">
+            </div>
+        </div>
+    </div>
+    <div id="bottom-tab-bar" class="bottom-tab-bar hidden">
+        <button class="bottom-tab-item active" id="tab-list">
+            <div class="bottom-tab-item-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+            <div class="bottom-tab-item-label">列表</div>
+        </button>
+        <button class="bottom-tab-item" id="tab-users">
+            <div class="bottom-tab-item-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>
+            <div class="bottom-tab-item-label">用户</div>
+        </button>
+        <button class="bottom-tab-item" id="tab-settings">
+            <div class="bottom-tab-item-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></div>
+            <div class="bottom-tab-item-label">设置</div>
+        </button>
+    </div>
+</div>
+
+<div id="settings-panel" class="settings-panel">
+    <div id="settings-main" class="settings-page active">
+        <div class="settings-nav-header">
+            <button class="back-btn" id="settings-back-btn"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span class="nav-title">设置</span>
+        </div>
+        <div class="settings-scroll">
+            <!-- Phase 3 (U3): 存储用量配额进度条，由 /api/wasm/me 30s 轮询填充 -->
+            <div class="settings-group" id="quota-usage-group" style="display:none;">
+                <div style="padding:12px 16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="font-size:13px;font-weight:600;color:var(--text-primary);">存储用量</span>
+                        <span style="font-size:11px;color:var(--text-hint);" id="quota-storage-target"></span>
+                    </div>
+                    <div id="quota-usage-container"></div>
+                </div>
+            </div>
+            <div class="settings-group">
+                <div class="settings-item" id="settings-theme-item">
+                    <div class="settings-item-icon" style="background:#E5E5EA;color:#636366;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></div>
+                    <div class="settings-item-content">
+                        <div class="settings-item-label" id="theme-label">深色模式</div>
+                        <div class="settings-item-desc">点击切换主题</div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-group">
+                <div class="settings-item" id="settings-webdav-item">
+                    <div class="settings-item-icon" style="background:#E5E5EA;color:#636366;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></div>
+                    <div class="settings-item-content">
+                        <div class="settings-item-label">WebDAV 存储</div>
+                        <div class="settings-item-desc" id="webdav-summary">未启用 · 节省服务器磁盘</div>
+                    </div>
+                    <div class="settings-item-arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+                </div>
+            </div>
+            <div class="settings-group">
+                <div class="settings-item" id="settings-about-item">
+                    <div class="settings-item-icon" style="background:#E5E5EA;color:#636366;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>
+                    <div class="settings-item-content">
+                        <div class="settings-item-label">关于</div>
+                        <div class="settings-item-desc">查看作者与版本信息</div>
+                    </div>
+                    <div class="settings-item-arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+                </div>
+            </div>
+            <!-- Phase 5 (U10): 账号安全——修改密码 + 退出登录 -->
+            <div class="settings-group">
+                <div class="settings-item" id="settings-account-item">
+                    <div class="settings-item-icon" style="background:#E5E5EA;color:#636366;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+                    <div class="settings-item-content">
+                        <div class="settings-item-label">账号安全</div>
+                        <div class="settings-item-desc">修改密码、退出登录</div>
+                    </div>
+                    <div class="settings-item-arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Phase 5 (U10): 账号安全子页面——修改密码 + 退出登录 -->
+    <div id="settings-account" class="settings-page">
+        <div class="settings-nav-header">
+            <button class="back-btn" id="account-back-btn"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span class="nav-title">账号安全</span>
+        </div>
+        <div class="settings-scroll">
+            <div class="settings-body">
+                <div class="settings-group">
+                    <div class="settings-group-title">修改密码</div>
+                    <div class="webdav-tip">修改成功后，当前及其他设备的登录都会失效，所有设备均需使用新密码重新登录。</div>
+                    <div class="webdav-form">
+                        <label class="webdav-row webdav-row-input">
+                            <span class="webdav-label">旧密码</span>
+                            <input type="password" id="account-old-password" class="webdav-input" placeholder="当前密码" autocomplete="current-password" />
+                        </label>
+                        <label class="webdav-row webdav-row-input">
+                            <span class="webdav-label">新密码</span>
+                            <input type="password" id="account-new-password" class="webdav-input" placeholder="至少 8 位，含大小写字母和数字" autocomplete="new-password" minlength="8" maxlength="128" />
+                        </label>
+                        <label class="webdav-row webdav-row-input">
+                            <span class="webdav-label">确认新密码</span>
+                            <input type="password" id="account-confirm-password" class="webdav-input" placeholder="再次输入新密码" autocomplete="new-password" minlength="8" maxlength="128" />
+                        </label>
+                    </div>
+                    <div class="webdav-actions">
+                        <button type="button" class="webdav-btn primary" id="account-save-btn">修改密码</button>
+                    </div>
+                    <div id="account-status-msg" class="webdav-tip" style="display:none;"></div>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-group-title">退出登录</div>
+                    <label class="webdav-row">
+                        <span class="webdav-label">
+                            退出时撤销"记住我"令牌
+                            <span class="webdav-sub">勾选后，退出登录将同时撤销本账号所有设备的自动登录令牌（更安全，需重新输入密码登录）。</span>
+                        </span>
+                        <input type="checkbox" id="account-logout-revoke-device" class="webdav-toggle" />
+                    </label>
+                    <div class="webdav-actions">
+                        <button type="button" class="webdav-btn secondary full btn-danger" id="account-logout-btn">退出登录</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="settings-webdav" class="settings-page">
+        <div class="settings-nav-header">
+            <button class="back-btn" id="webdav-back-btn"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span class="nav-title">WebDAV 存储</span>
+        </div>
+        <div class="settings-scroll">
+            <div class="settings-body">
+                <div class="webdav-tip">
+                    把媒体（图片/视频/语音/文件）存到 WebDAV，节省服务器存储容量。<br>
+                    注意：上传/下载流量不会因此减少，建议配合省流量模式使用。
+                </div>
+                <div class="webdav-form">
+                    <label class="webdav-row">
+                        <span class="webdav-label">启用 WebDAV</span>
+                        <input type="checkbox" id="webdav-enabled" class="webdav-toggle" />
+                    </label>
+                    <label class="webdav-row webdav-row-input">
+                        <span class="webdav-label">服务地址</span>
+                        <input type="url" id="webdav-url" class="webdav-input" placeholder="https://dav.example.com/dav" />
+                    </label>
+                    <label class="webdav-row webdav-row-input">
+                        <span class="webdav-label">用户名</span>
+                        <input type="text" id="webdav-username" class="webdav-input" placeholder="username" autocomplete="off" />
+                    </label>
+                    <label class="webdav-row webdav-row-input">
+                        <span class="webdav-label">密码</span>
+                        <input type="password" id="webdav-password" class="webdav-input" placeholder="留空表示不修改" autocomplete="new-password" />
+                    </label>
+                    <label class="webdav-row webdav-row-input">
+                        <span class="webdav-label">远程目录</span>
+                        <input type="text" id="webdav-base-path" class="webdav-input" placeholder="/ilink-media" />
+                    </label>
+                    <label class="webdav-row">
+                        <span class="webdav-label">
+                            省流量模式
+                            <span class="webdav-sub">开启后聊天界面不自动加载媒体，需在此关闭后才会显示。</span>
+                        </span>
+                        <input type="checkbox" id="webdav-traffic-saver" class="webdav-toggle" />
+                    </label>
+                    <label class="webdav-row">
+                        <span class="webdav-label">
+                            保存时自动迁移
+                            <span class="webdav-sub">保存配置后自动将本地已有媒体上传到 WebDAV（默认关闭）。</span>
+                        </span>
+                        <input type="checkbox" id="webdav-auto-migrate" class="webdav-toggle" />
+                    </label>
+                </div>
+                <div class="webdav-actions">
+                    <button type="button" class="webdav-btn secondary" id="webdav-test-btn">测试连接</button>
+                    <button type="button" class="webdav-btn primary" id="webdav-save-btn">保存</button>
+                </div>
+                <div class="webdav-actions">
+                    <button type="button" class="webdav-btn secondary full" id="webdav-migrate-btn">迁移本地媒体到 WebDAV</button>
+                </div>
+                <div id="webdav-progress-wrap" class="webdav-progress-wrap" style="display:none;">
+                    <div class="webdav-progress-bar"><div id="webdav-progress-fill" class="webdav-progress-fill"></div></div>
+                    <div id="webdav-progress-text" class="webdav-progress-text"></div>
+                </div>
+                <div id="webdav-status-msg" class="webdav-status-msg"></div>
+            </div>
+        </div>
+    </div>
+    <div id="settings-about" class="settings-page">
+        <div class="settings-nav-header">
+            <button class="back-btn" id="about-back-btn"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span class="nav-title">关于</span>
+        </div>
+        <div class="settings-scroll">
+            <div class="settings-body">
+                <div class="about-logo">
+                    <div class="about-avatars">
+                        <div class="about-avatar-item">
+                            <img class="about-logo-img" src="https://ms.188850.xyz/file/default/1780497560383_retouch_2026050219212691.png" alt="作者头像" />
+                            <div class="about-avatar-label">原作者</div>
+                        </div>
+                        <div class="about-avatar-item">
+                            <img class="about-logo-img" src="https://ms.188850.xyz/file/default/1781359642988_90b10eb9ly1i20q3tr6zhj20xb1ccapn_1_.jpg" alt="修改者头像" />
+                            <div class="about-avatar-label">修改</div>
+                        </div>
+                    </div>
+                    <div class="about-logo-name">Zyn iLink ChatBox · WongMod</div>
+                </div>
+                <div class="about-info">
+                    <div class="about-row">
+                        <div class="about-label">作者</div>
+                        <div class="about-value" id="about-author">ZynSync</div>
+                    </div>
+                    <div class="about-row">
+                        <div class="about-label">修改</div>
+                        <div class="about-value" id="about-modifier">Mr.Wong</div>
+                    </div>
+                    <div class="about-row">
+                        <div class="about-label">版本号</div>
+                        <div class="about-value" id="about-version">2.9.0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="media-upload-progress" class="media-upload-progress">
+    <div class="media-upload-box">
+        <div class="media-upload-spinner"></div>
+        <div class="media-upload-text">正在发送...</div>
+    </div>
+</div>
+<div id="nickname-modal" class="nickname-modal">
+    <div class="nickname-modal-content">
+        <div class="nickname-modal-title">设置备注名</div>
+        <div id="nickname-modal-userid" class="nickname-modal-userid"></div>
+        <input type="text" id="nickname-input" class="nickname-modal-input" placeholder="输入备注名..." />
+        <div class="nickname-modal-btns">
+            <button id="nickname-cancel-btn" class="nickname-modal-btn cancel">取消</button>
+            <button id="nickname-save-btn" class="nickname-modal-btn save">保存</button>
+        </div>
+    </div>
+</div>
+<div id="add-user-modal" class="add-user-modal">
+    <div class="add-user-modal-content">
+        <div class="add-user-modal-title">添加新用户</div>
+        <div class="add-user-modal-status" id="add-user-status">正在生成二维码...</div>
+        <div class="add-user-modal-qr" id="add-user-qr"></div>
+        <button class="add-user-modal-close" id="add-user-close-btn">关闭</button>
+    </div>
+</div>
+
+<script>window.__ZN_AUTH_REQUIRED="{{AUTH_REQUIRED}}"</script>
+<script>
+// FIX H-7 (2026-07-18): session_token 不再嵌入 HTML，统一通过 HttpOnly Cookie 传递。
+//   未认证用户后端会 302 重定向到 /auth；此处的本地检查保留作为兜底（cookie 失效但页面仍被缓存等边缘场景）。
+//   不再读取 window.__ZN_SESSION_TOKEN，改为请求 /api/wasm/me 探测认证状态。
+// FIX 2026-07-19: 探测成功（非 401）时把 _state.token 标记为非空。
+//   背景：H-7 后 token 在 HttpOnly Cookie 里、JS 拿不到。auth.html 登录成功只跳转
+//   /chat，没把 token 写回 _state.token。zn-main.js 的 12h refresh 用 if (!_state.token)
+//   return 守卫，结果 refresh 永远不触发，30 天后 cookie 过期用户必须重新手动登录。
+//   这里在 cookie 鉴权通过时把 _state.token 设为非空（具体值不重要，refresh 成功后
+//   会被 zn-connection.js:615 覆盖为新 token），让 refresh 路径有条件触发。
+//   __ZN_AUTH_REQUIRED === "true" 表示后端认为未认证（cookie 失效），直接跳 /auth。
+//   __ZN_AUTH_REQUIRED === "false" 表示后端认为已认证，仍需探测一次确认 cookie 真的有效。
+// FIX P0-5 (2026-07-20): 同时设置 _state.loggedIn=true，作为后续 12h refresh /
+//   可见性同步 / online 重连 / 扫码期 WS 预启动的统一登录态判据，
+//   不再依赖 _state.token 真值判断（Cookie 迁移后 _state.token 仅作为兼容遗留字段）。
+(function() {
+    var x = new XMLHttpRequest();
+    x.open("GET", "/api/wasm/me", true);
+    x.timeout = 4000;
+    x.onload = function() {
+        if (x.status === 401) {
+            // 探测到未认证：仅在 __ZN_AUTH_REQUIRED 显式要求时跳转，避免误把
+            // "后端暂时没识别到 cookie"（网络抖动）也当成已退出。
+            if (window.__ZN_AUTH_REQUIRED === "true") {
+                window.location.href = "/auth";
+            }
+        } else {
+            // 探测成功：标记登录态。_state.token 保留以兼容老代码（不再用作真值判断），
+            // _state.loggedIn 是后续所有登录态守卫的唯一判据。
+            if (typeof _state !== "undefined") {
+                if (!_state.token) _state.token = "cookie";
+                _state.loggedIn = true;
+                // 存储当前用户 uid，用于 /notify 通知按 target_uid 过滤
+                try {
+                    var me = JSON.parse(x.responseText);
+                    if (me && me.uid) _state.webUid = me.uid;
+                } catch(e) {}
+            }
+        }
+    };
+    x.onerror = function() { /* 网络错误不跳转，避免误伤 */ };
+    x.send();
+})();
+</script>
+<script src="/static/zn-site.js"></script>
+<script src="/static/zn-core.js"></script>
+<script src="/static/zn-api.js"></script>
+<div id="image-lightbox" class="image-lightbox" style="display:none;" onclick="this.style.display='none'">
+    <span class="image-lightbox-close">&times;</span>
+    <img class="image-lightbox-img" id="lightbox-img" src="" alt="放大图片" />
+</div>
+
+<script src="/static/zn-utils.js"></script>
+<script src="/static/zn-render.js"></script>
+<script src="/static/zn-media.js"></script>
+<script src="/static/zn-users.js"></script>
+<script src="/static/zn-history.js"></script>
+<script src="/static/zn-connection.js"></script>
+<script src="/static/zn-events.js"></script>
+<script src="/static/zn-send.js"></script>
+<script src="/static/zn-upload.js"></script>
+<script src="/static/zn-settings.js"></script>
+<script src="/static/zn-main.js"></script>
+</body>
+</html>

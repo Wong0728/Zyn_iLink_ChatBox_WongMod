@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>Zyn iLink ChatBox · WongMod</title>
+  <meta name="description" content="微信官方 iLink 协议 · 开源消息管理平台（Rust 重构版）。单二进制部署，内置 SQLite 零配置，多用户、审计日志与安全加固。">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="stylesheet" href="landing.css">
+  <script>
+    // Apply theme before first paint to avoid flash. Default respects system preference.
+    (function () {
+      try {
+        var t = localStorage.getItem('ilink-theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0a' : '#ffffff');
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <style>
+    /* ── 本页专有：对比表 / 安装命令卡片 ─────────────────── */
+    .compare-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); }
+    table.compare-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 640px; }
+    .compare-table th, .compare-table td { padding: 13px 18px; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: top; }
+    .compare-table thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-tertiary); background: var(--bg-tertiary); }
+    .compare-table tbody tr:last-child td { border-bottom: none; }
+    .compare-table td:first-child { color: var(--text-secondary); white-space: nowrap; font-weight: 600; }
+    .compare-table .yes { color: var(--accent); font-weight: 600; }
+    .compare-table .no { color: var(--text-tertiary); }
+
+    .cmd-card { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; text-align: left; }
+    .cmd-card + .cmd-card { margin-top: 16px; }
+    .cmd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border-color); background: var(--bg-tertiary); }
+    .cmd-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); }
+    .cmd-copy { flex-shrink: 0; padding: 5px 14px; border-radius: 999px; border: 1px solid var(--border-hover); background: transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all var(--transition-fast); }
+    .cmd-copy:hover { border-color: var(--accent); color: var(--accent); }
+    .cmd-body { padding: 16px 18px; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; color: var(--text-primary); overflow-x: auto; white-space: pre; }
+    .cmd-body .p { color: var(--accent); }
+    .cmd-note { padding: 0 18px 14px; font-size: 12.5px; color: var(--text-tertiary); }
+    .os-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--accent-dim); color: var(--accent); }
+    .os-badge.blue { background: rgba(10,132,255,.14); color: #4da3ff; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ Navigation ═══════════════════════════════════════════ -->
+<nav class="nav">
+  <div class="nav-left">
+    <button class="nav-theme-toggle" aria-label="切换深浅色模式" title="切换深浅色模式"></button>
+    <div class="nav-logo">Zyn iLink ChatBox · WongMod</div>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#architecture">架构</a></li>
+    <li><a href="#features">功能</a></li>
+    <li><a href="#compare">对比</a></li>
+    <li><a href="#security">安全</a></li>
+    <li><a href="#install">安装</a></li>
+    <li><a href="https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod" target="_blank" rel="noopener noreferrer" class="nav-cta">进入仓库</a></li>
+  </ul>
+  <button class="nav-mobile-toggle" aria-label="菜单" aria-expanded="false">
+    <svg class="nav-icon-hamburger" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    <svg class="nav-icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+</nav>
+
+<!-- Mobile menu modal -->
+<div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+  <div class="mobile-menu-backdrop"></div>
+  <div class="mobile-menu-panel">
+    <a href="#architecture" class="mobile-menu-btn">架构</a>
+    <a href="#features" class="mobile-menu-btn">功能</a>
+    <a href="#compare" class="mobile-menu-btn">对比</a>
+    <a href="#security" class="mobile-menu-btn">安全</a>
+    <a href="#install" class="mobile-menu-btn">安装</a>
+    <div class="mobile-menu-divider"></div>
+    <a href="https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod" target="_blank" rel="noopener noreferrer" class="mobile-menu-btn mobile-menu-btn--accent">进入仓库</a>
+    <a href="https://framecode.gt.tc" target="_blank" rel="noopener noreferrer" class="mobile-menu-btn mobile-menu-btn--primary">我的主页</a>
+  </div>
+</div>
+
+<!-- ═══ Hero ═════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-bg"><canvas id="hero-dots"></canvas></div>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+      微信 iLink 协议 · 开源
+    </div>
+    <h1 class="hero-title">Zyn iLink ChatBox · WongMod</h1>
+    <p class="hero-subtitle">微信官方 iLink 协议 · 开源消息管理平台 · Rust 重构版</p>
+    <p class="hero-tagline">单二进制部署，内置 SQLite 零配置。多用户 Web 实时聊天、WebDAV 云存储、审计日志，经完整安全审计（0 高危）。</p>
+
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px;">
+      <a href="https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod" target="_blank" rel="noopener noreferrer" class="cta-button" style="display:inline-flex;align-items:center;gap:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.245.54.945 1.425 1.29 2.46.975.075-.63.3-1.29.54-1.65-1.89-.21-3.87-.945-3.87-4.2 0-.945.345-1.71.9-2.31-.09-.225-.39-1.11.09-2.31 0 0 .735-.24 2.43.885a8.355 8.355 0 012.25-.315c.765 0 1.53.105 2.25.315 1.695-1.125 2.43-.885 2.43-.885.48 1.2.18 2.085.09 2.31.555.6.9 1.365.9 2.31 0 3.27-1.995 3.99-3.87 4.2.3.255.57.765.57 1.56 0 1.125-.015 2.025-.015 2.31 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        进入仓库
+      </a>
+      <a href="https://framecode.gt.tc" target="_blank" rel="noopener noreferrer" class="cta-button" style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--accent);color:var(--accent);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        我的主页
+      </a>
+    </div>
+
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value">Apache-2.0</div>
+        <div class="hero-stat-label">开源协议</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">0</div>
+        <div class="hero-stat-label">已知高危漏洞</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">1</div>
+        <div class="hero-stat-label">行命令安装</div>
+      </div>
+    </div>
+
+    <div class="hero-credits">
+      <div class="hero-credit">
+        <img class="hero-credit-avatar" src="https://ms.188850.xyz/file/default/1780497560383_retouch_2026050219212691.png" alt="ZynSync 原作者头像" loading="lazy">
+        <div class="hero-credit-info">
+          <div class="hero-credit-name">ZynSync</div>
+          <div class="hero-credit-role">原作者</div>
+        </div>
+      </div>
+      <div class="hero-credit">
+        <img class="hero-credit-avatar" src="https://ms.188850.xyz/file/default/1781359642988_90b10eb9ly1i20q3tr6zhj20xb1ccapn_1_.jpg" alt="Mr.Wong 修改者头像" loading="lazy">
+        <div class="hero-credit-info">
+          <div class="hero-credit-name">Mr.Wong</div>
+          <div class="hero-credit-role">Rust 重构</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══ Architecture ══════════════════════════════════════════ -->
+<section class="section architecture" id="architecture">
+  <div class="reveal">
+    <span class="section-label">Architecture</span>
+    <h2 class="section-title">两条链路，构成整个系统</h2>
+    <p class="section-subtitle">iLink 协议连接微信，REST + WebSocket 连接前后端。无需额外中间件，全部在一个二进制里完成。</p>
+  </div>
+  <div class="arch-grid">
+    <!-- 系统与微信通信 -->
+    <div class="arch-card reveal reveal-delay-1">
+      <div class="arch-card-head">
+        <span class="arch-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+        </span>
+        <h3>系统与微信通信</h3>
+      </div>
+      <div class="arch-flow">
+        <div class="arch-node">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+          微信账号
+        </div>
+        <div class="arch-edge">
+          <span>扫码登录</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <div class="arch-node arch-node--hl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+          ilink-wm1
+        </div>
+        <div class="arch-edge">
+          <span>iLink 协议</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <div class="arch-node">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          消息收发
+        </div>
+      </div>
+      <p class="arch-desc">通过微信 iLink 协议接管会话，扫码登录后即可实时收发文字、图片、视频与文件消息。</p>
+    </div>
+
+    <!-- 前端与后端通信 -->
+    <div class="arch-card reveal reveal-delay-2">
+      <div class="arch-card-head">
+        <span class="arch-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </span>
+        <h3>前端与后端通信</h3>
+      </div>
+      <div class="arch-flow">
+        <div class="arch-node">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Web 聊天
+        </div>
+        <div class="arch-edge">
+          <span>REST API</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <div class="arch-node arch-node--hl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          Rust 后端
+        </div>
+        <div class="arch-edge">
+          <span>WebSocket</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <div class="arch-node">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          实时推送
+        </div>
+      </div>
+      <p class="arch-desc">浏览器通过 REST API 管理会话与配置，经 WebSocket 接收实时消息与状态变更，界面与后台始终同步。</p>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══ Features ══════════════════════════════════════════════ -->
+<section class="section features" id="features">
+  <div class="reveal">
+    <span class="section-label">Features</span>
+    <h2 class="section-title">一站式管理微信会话</h2>
+    <p class="section-subtitle">从扫码连接到实时聊天，WongMod 提供完整的 Web 聊天界面、WebDAV 云存储、多会话管理和消息历史导出。</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card reveal reveal-delay-1">
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      </div>
+      <div class="feature-info">
+        <h3>Web 实时聊天</h3>
+        <p>浏览器直接收发消息，支持文字、图片、视频、文件</p>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-2">
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+      </div>
+      <div class="feature-info">
+        <h3>WebDAV 云存储</h3>
+        <p>媒体文件存到 WebDAV，节省本机磁盘空间</p>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-3">
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      </div>
+      <div class="feature-info">
+        <h3>多用户与多会话</h3>
+        <p>三级角色账号体系，每人独立管理自己的微信会话</p>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-4">
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      </div>
+      <div class="feature-info">
+        <h3>消息历史与导出</h3>
+        <p>完整消息记录，支持导出聊天记录为 HTML</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══ Compare ═══════════════════════════════════════════════ -->
+<section class="section" id="compare">
+  <div class="reveal">
+    <span class="section-label">Compare</span>
+    <h2 class="section-title">对比原版：一次认真的 Rust 重构</h2>
+    <p class="section-subtitle">原版 Zyn iLink ChatBox（Python 单文件，最新 v3.2.4）是轻量的单用户客户端；WongMod 把它重构成了可部署的多用户平台，并完成一轮全量安全审计。</p>
+  </div>
+  <div class="reveal reveal-delay-1" style="margin-top:32px;">
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.0</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>运行形态</td><td class="no">Python 3.7+，需 pip 安装 qrcode / pycryptodomex / pilk</td><td class="yes">单二进制 + web/ 目录，零运行时依赖</td></tr>
+          <tr><td>用户体系</td><td class="no">单用户（Web 访问密码）</td><td class="yes">owner / admin / user 三级角色、邀请码注册、设备令牌</td></tr>
+          <tr><td>存储</td><td class="no">文件 + 单库</td><td class="yes">SQLite 分库（系统库 + 用户库）、配额、LRU 媒体清理</td></tr>
+          <tr><td>密码与凭证</td><td class="no">基础口令保护</td><td class="yes">PBKDF2 600k 迭代 · AES-256-GCM 加密 · Windows DPAPI 密钥包装</td></tr>
+          <tr><td>审计与合规</td><td class="no">—</td><td class="yes">全量管理操作审计日志（默认 90 天）· S10 破坏性命令二次确认</td></tr>
+          <tr><td>服务化运维</td><td class="no">手动运行 / 启动器热更新</td><td class="yes">systemd / NSSM 服务 · iLinkWM 统一命令行 · Cloudflare 隧道脚本</td></tr>
+          <tr><td>内网穿透</td><td class="no">—</td><td class="yes">内置 SSH 反向隧道（带端口白名单与二次确认）</td></tr>
+          <tr><td>安全审计</td><td class="no">—</td><td class="yes">静态全量审计：0 高危 / 11 中危（9 已修复、2 风险接受），报告随仓库公开</td></tr>
+          <tr><td>开源协议</td><td>Apache-2.0</td><td>Apache-2.0（合规标注原仓库与原作者）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══ Security ══════════════════════════════════════════════ -->
+<section class="section security" id="security">
+  <div class="reveal">
+    <span class="section-label">Security</span>
+    <h2 class="section-title">安全可靠</h2>
+  </div>
+  <div class="security-grid">
+    <div class="security-card reveal reveal-delay-1">
+      <div class="security-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <h3>凭证加密</h3>
+      <p>AES-256-GCM 落库，Windows 主密钥经 DPAPI 机器作用域包装</p>
+    </div>
+    <div class="security-card reveal reveal-delay-2">
+      <div class="security-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      </div>
+      <h3>本地存储</h3>
+      <p>所有数据保存在本地 SQLite，不上传任何第三方</p>
+    </div>
+    <div class="security-card reveal reveal-delay-3">
+      <div class="security-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      </div>
+      <h3>多重防护</h3>
+      <p>SSRF 校验、登录限流、指纹快速登录、审计日志、CLI 二次确认</p>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══ Install ═══════════════════════════════════════════════ -->
+<section class="section" id="install">
+  <div class="reveal">
+    <span class="section-label">Install</span>
+    <h2 class="section-title">一行命令，装好 iLinkWM</h2>
+    <p class="section-subtitle">安装后使用 <code style="font-family:var(--font-mono);color:var(--accent);">iLinkWM</code> 命令：直接运行即启动程序；install-service 注册系统服务；update 自更新；uninstall 卸载。</p>
+  </div>
+  <div class="reveal reveal-delay-1" style="margin-top:32px;">
+    <div class="cmd-card">
+      <div class="cmd-head">
+        <span class="cmd-title"><span class="os-badge blue">Windows</span>&nbsp;&nbsp;PowerShell 一键安装</span>
+        <button class="cmd-copy" type="button" data-copy>复制</button>
+      </div>
+      <div class="cmd-body"><span class="p">irm</span> https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/windows/install.ps1 <span class="p">| iex</span></div>
+      <p class="cmd-note">优先下载 Release 预编译包；无可用包时自动回退「克隆源码 + cargo 编译」。安装到 %LOCALAPPDATA%\Programs\iLinkWM，自动加入 PATH。</p>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-head">
+        <span class="cmd-title"><span class="os-badge">Linux · macOS · Termux</span>&nbsp;&nbsp;一键安装</span>
+        <button class="cmd-copy" type="button" data-copy>复制</button>
+      </div>
+      <div class="cmd-body"><span class="p">curl -fsSL</span> https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh <span class="p">| bash</span></div>
+      <p class="cmd-note">用户态安装到 ~/.local/share/iLinkWM，命令入口 ~/.local/bin/iLinkWM；root 执行 install-service 可注册 systemd 系统服务。服务器完整部署见仓库 deploy/linux/install-server.sh。</p>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-head">
+        <span class="cmd-title">iLinkWM 常用命令</span>
+        <button class="cmd-copy" type="button" data-copy>复制</button>
+      </div>
+      <div class="cmd-body">iLinkWM                      <span class="p"># 启动程序（首次进入初始化向导）</span>
+iLinkWM install-service      <span class="p"># 注册系统服务（Win: NSSM / Linux: systemd）</span>
+iLinkWM update               <span class="p"># 更新到最新版本（保留数据）</span>
+iLinkWM uninstall [--purge]  <span class="p"># 卸载（--purge 连数据一起删）</span>
+iLinkWM admin ...            <span class="p"># 管理子命令原样传给 ilink-wm1</span></div>
+      <p class="cmd-note">预编译包见 GitHub Releases（Windows x64 / Linux x64·arm64 / macOS arm64 + 源码包，附 SHA-256 校验）。</p>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══ References ════════════════════════════════════════════ -->
+<section class="section" id="references">
+  <div class="reveal">
+    <span class="section-label">References</span>
+    <h2 class="section-title">参考项目与致谢</h2>
+    <p class="section-subtitle">WongMod 站在巨人的肩膀上。以下项目是本项目的参考来源：</p>
+  </div>
+  <div class="features-grid" style="margin-top:32px;">
+    <div class="feature-card reveal reveal-delay-1">
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.245.54.945 1.425 1.29 2.46.975.075-.63.3-1.29.54-1.65-1.89-.21-3.87-.945-3.87-4.2 0-.945.345-1.71.9-2.31-.09-.225-.39-1.11.09-2.31 0 0 .735-.24 2.43.885a8.355 8.355 0 012.25-.315c.765 0 1.53.105 2.25.315 1.695-1.125 2.43-.885 2.43-.885.48 1.2.18 2.085.09 2.31.555.6.9 1.365.9 2.31 0 3.27-1.995 3.99-3.87 4.2.3.255.57.765.57 1.56 0 1.125-.015 2.025-.015 2.31 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      </div>
+      <div class="feature-info">
+        <h3><a href="https://github.com/zynsync/Zyn-iLink-ChatBox" target="_blank" rel="noopener noreferrer" style="color:inherit;">zynsync/Zyn-iLink-ChatBox</a></h3>
+        <p>原项目（Python）：基于微信官方 iLink 接口的轻量客户端，本项目由其移植重构</p>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-2">
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      </div>
+      <div class="feature-info">
+        <h3><a href="https://github.com/openilink" target="_blank" rel="noopener noreferrer" style="color:inherit;">openilink</a></h3>
+        <p>开源 iLink 协议生态：协议文档与实现思路参考</p>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-3">
+      <div class="feature-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="feature-info">
+        <h3><a href="https://github.com/Wong0728" target="_blank" rel="noopener noreferrer" style="color:inherit;">Mr.Wong（Wong0728）</a></h3>
+        <p>本仓库维护者 · <a href="https://framecode.gt.tc" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">个人主页 FrameCode.GT.TC ↗</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══ CTA ═══════════════════════════════════════════════════ -->
+<section class="cta">
+  <div class="cta-box reveal">
+    <h2 class="section-title">把你的微信会话，放进自己的服务器</h2>
+    <p class="cta-text">克隆仓库、阅读完整文档，或直接一行命令开始。</p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <a href="https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod" target="_blank" rel="noopener noreferrer" class="cta-button">
+        进入仓库
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </a>
+      <a href="https://framecode.gt.tc" target="_blank" rel="noopener noreferrer" class="cta-button" style="background:transparent;border:1px solid var(--accent);color:var(--accent);">
+        我的主页
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Footer ═══════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">Zyn iLink ChatBox · WongMod</div>
+    <div class="footer-credit">Based on Zyn iLink ChatBox by ZynSync · Rust 重构 by Mr.Wong</div>
+    <div class="footer-license">Apache-2.0 License · 衍生使用请标注原仓库与原作者</div>
+    <a class="footer-link" href="https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod" target="_blank" rel="noopener noreferrer">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.245.54.945 1.425 1.29 2.46.975.075-.63.3-1.29.54-1.65-1.89-.21-3.87-.945-3.87-4.2 0-.945.345-1.71.9-2.31-.09-.225-.39-1.11.09-2.31 0 0 .735-.24 2.43.885a8.355 8.355 0 012.25-.315c.765 0 1.53.105 2.25.315 1.695-1.125 2.43-.885 2.43-.885.48 1.2.18 2.085.09 2.31.555.6.9 1.365.9 2.31 0 3.27-1.995 3.99-3.87 4.2.3.255.57.765.57 1.56 0 1.125-.015 2.025-.015 2.31 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a>
+  </div>
+</footer>
+
+<script src="landing.js"></script>
+<script>
+(function () {
+  // 安装命令复制按钮：复制同卡片内 .cmd-body 的纯文本
+  document.querySelectorAll('button[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var card = btn.closest('.cmd-card');
+      var body = card && card.querySelector('.cmd-body');
+      if (!body) return;
+      var text = body.innerText.trim();
+      function done() {
+        btn.textContent = '已复制';
+        setTimeout(function () { btn.textContent = '复制'; }, 1600);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () { fallback(); });
+      } else { fallback(); }
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

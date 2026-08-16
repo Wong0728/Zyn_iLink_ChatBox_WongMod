@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title data-site-name>Zyn iLink ChatBox · WongMod</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  body { margin: 0; }
+  .auth-container {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    padding: 6vh 24px 24px; background: var(--chat-bg); color: var(--text-primary);
+    overflow-y: auto; box-sizing: border-box;
+  }
+  .auth-card {
+    width: 100%; max-width: 400px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 28px 24px;
+    box-shadow: var(--shadow-md);
+  }
+  .auth-header { text-align: center; margin-bottom: 20px; }
+  .auth-header h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; color: var(--text-primary); }
+  .auth-header p { color: var(--text-secondary); font-size: 13px; margin: 0; }
+  /* Tab bar */
+  .auth-tabs {
+    display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px;
+  }
+  .auth-tab {
+    flex: 1; text-align: center; padding: 10px 0; font-size: 15px;
+    color: var(--text-secondary); cursor: pointer; border: none; background: none;
+    border-bottom: 2px solid transparent; transition: color .2s, border-color .2s;
+    font-family: inherit;
+  }
+  .auth-tab.active {
+    color: var(--accent); border-bottom-color: var(--accent); font-weight: 500;
+  }
+  /* Form elements (shared) */
+  .auth-form { display: flex; flex-direction: column; gap: 12px; }
+  .auth-input {
+    width: 100%; height: 44px; padding: 0 14px; box-sizing: border-box;
+    border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+    background: var(--input-bg); color: var(--text-primary);
+    font-size: 15px; outline: none; transition: border-color .2s ease;
+  }
+  .auth-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+  }
+  .auth-agree-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 13px; color: var(--text-secondary); line-height: 1.4;
+    cursor: pointer; user-select: none;
+  }
+  .auth-agree-row input[type="checkbox"] {
+    margin-top: 2px; flex: 0 0 auto; cursor: pointer;
+  }
+  .auth-agree-row a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .auth-error {
+    color: #ff4d4f; font-size: 13px; line-height: 1.4; min-height: 0;
+  }
+  .auth-submit-btn {
+    width: 100%; height: 44px; border: 0; border-radius: var(--radius-sm);
+    background: var(--accent); color: #fff; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: all .2s ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .auth-submit-btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .auth-submit-btn:active { transform: translateY(0); }
+  .auth-submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .auth-footer {
+    text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-secondary);
+  }
+  .auth-footer a { color: var(--accent); text-decoration: none; }
+  /* Password strength (register) */
+  .auth-strength { height: 4px; border-radius: 2px; background: var(--bg-secondary); overflow: hidden; margin-top: -8px; }
+  .auth-strength-bar { height: 100%; width: 0; transition: width .3s, background-color .3s; }
+  /* FIX register-density (2026-07-21): min-height 改为 0，空标签不占空间 */
+  .auth-strength-label { font-size: 11px; color: var(--text-hint, var(--text-secondary)); margin-top: 4px; min-height: 0; line-height: 1.5; }
+  /* Closed message */
+  .auth-closed { text-align: center; padding: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+  :root { --bg-input: rgba(0,0,0,0.04); --text-hint: #999; }
+  [data-theme="dark"] { --bg-input: rgba(255,255,255,0.06); --text-hint: #666; }
+</style>
+</head>
+<body>
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <h1 data-site-name>Zyn iLink ChatBox · WongMod</h1>
+      <p id="auth-subtitle">登录或创建你的账号</p>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login">登录</button>
+      <button class="auth-tab" id="tab-register">注册</button>
+    </div>
+
+    <!-- ===== Login Form ===== -->
+    <form id="login-form" class="auth-form">
+      <input type="text" id="login-username" class="auth-input" placeholder="用户名" autocomplete="username" maxlength="32" required />
+      <input type="password" id="login-password" class="auth-input" placeholder="密码" autocomplete="current-password" maxlength="128" required />
+      <label class="auth-agree-row">
+        <input type="checkbox" id="login-agree-terms" />
+        <span>同意<a href="/terms" target="_blank" rel="noopener noreferrer">《使用守则》</a></span>
+      </label>
+      <label class="auth-agree-row">
+        <input type="checkbox" id="login-remember-me" />
+        <span>记住我（退出后自动填充账号，一键登录）</span>
+      </label>
+      <div class="auth-error" id="login-error" style="display:none"></div>
+      <button type="submit" class="auth-submit-btn" id="login-btn">确认登录</button>
+    </form>
+
+    <!-- ===== Register Form ===== -->
+    <form id="register-form" class="auth-form" style="display:none">
+      <label class="auth-agree-row">
+        <input type="checkbox" id="register-agree">
+        <span>我已阅读并同意<a href="/terms" target="_blank" rel="noopener noreferrer">《使用守则》</a><span id="register-terms-version">v1.0</span></span>
+      </label>
+      <input type="text" id="register-username" class="auth-input"
+             placeholder="用户名（字母/数字/下划线，3-32 位）"
+             autocomplete="username" maxlength="32" required>
+      <input type="password" id="register-password" class="auth-input"
+             placeholder="密码（至少 8 位，含大小写字母和数字）"
+             autocomplete="new-password" maxlength="128" required>
+      <div class="auth-strength"><div class="auth-strength-bar" id="register-strength-bar"></div></div>
+      <div class="auth-strength-label" id="register-strength-label"></div>
+      <input type="password" id="register-confirm" class="auth-input"
+             placeholder="确认密码" autocomplete="new-password" maxlength="128" required>
+      <!-- FIX register-invite-group (2026-07-21): 邀请码区按 allow_invite 整体显隐 -->
+      <div id="register-invite-group">
+        <div class="auth-strength-label" style="margin-top:0;color:var(--text-secondary);">
+          请输入管理员提供的邀请码以完成注册
+        </div>
+        <input type="text" id="register-invite" class="auth-input"
+               placeholder="请输入管理员提供的邀请码" autocomplete="off" required>
+      </div>
+      <div class="auth-error" id="register-error"></div>
+      <button type="submit" class="auth-submit-btn" id="register-submit">创建账号</button>
+    </form>
+    <!-- FIX register-closed-position (2026-07-21): closed 移出 form，form 隐藏时不会一起消失 -->
+    <div id="register-closed" class="auth-closed" style="display:none">
+      注册已关闭，请联系管理员获取账号。
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Reserved usernames (mirror backend web.rs) ──
+  var RESERVED = ["admin","administrator","owner","root","system","sys",
+    "api","www","web","support","help","info","service",
+    "official","staff","mod","moderator","operator",
+    "null","undefined","test","guest","anonymous",
+    "ilink","zyn","chatbox","config","settings",
+    "login","register","logout","user","users","all",
+    "me","self","superuser","su"];
+
+  // ── Weak password blacklist (mirror auth.rs) ──
+  var WEAK = ["password1","password123","abc12345","qwerty123","12345678",
+              "123456789","1234567890","11111111","00000000","iloveyou1",
+              "admin123","letmein1","welcome1","monkey123","football1",
+              "p@ssw0rd","passw0rd","abcd1234"];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var termsVersion = "1.0";
+
+  // ── Tab switching ──
+  var tabLogin = $("tab-login");
+  var tabRegister = $("tab-register");
+  var loginForm = $("login-form");
+  var registerForm = $("register-form");
+  var registerClosed = $("register-closed");
+
+  // FIX login-tab-register-leak (2026-07-21): 注册状态模块级缓存。
+  //   旧实现 loadTermsAndStatus 无条件把 register-form 设成 flex，
+  //   导致 login tab 底部出现注册表单（/admin → /auth 时尤其明显）。
+  //   改为：注册面板的显隐完全由当前激活的 tab 决定，未在 register tab 时统一隐藏。
+  var _regClosed = false;
+  var _regAllowInvite = true;
+  var _regStatusLoaded = false;
+
+  function _renderRegisterPane() {
+    var isRegisterTab = tabRegister.classList.contains("active");
+    if (!isRegisterTab) {
+      // 登录 tab：注册面板整体隐藏，无论 status 是否已加载
+      registerForm.style.display = "none";
+      registerClosed.style.display = "none";
+      return;
+    }
+    // 注册 tab：根据 status 渲染对应面板
+    if (_regStatusLoaded && _regClosed) {
+      registerForm.style.display = "none";
+      registerClosed.style.display = "block";
+      $("auth-subtitle").textContent = "注册已关闭";
+      return;
+    }
+    registerClosed.style.display = "none";
+    registerForm.style.display = "flex";
+    var inviteGroup = $("register-invite-group");
+    if (_regStatusLoaded) {
+      if (_regAllowInvite) {
+        inviteGroup.style.display = "block";
+        $("register-invite").required = true;
+      } else {
+        inviteGroup.style.display = "none";
+        $("register-invite").required = false;
+        $("register-invite").value = "";
+        $("auth-subtitle").textContent = "请使用开放注册模式";
+      }
+    }
+  }
+
+  function switchTab(tab) {
+    if (tab === "register") {
+      tabLogin.classList.remove("active");
+      tabRegister.classList.add("active");
+      loginForm.style.display = "none";
+      _renderRegisterPane();
+    } else {
+      tabRegister.classList.remove("active");
+      tabLogin.classList.add("active");
+      _renderRegisterPane();
+      loginForm.style.display = "flex";
+    }
+  }
+  tabLogin.addEventListener("click", function () { switchTab("login"); });
+  tabRegister.addEventListener("click", function () { switchTab("register"); });
+
+  // URL param: ?mode=register → start on register tab
+  if (new URLSearchParams(window.location.search).get("mode") === "register") {
+    switchTab("register");
+  }
+
+  // ══════════════════════════════════════
+  // LOGIN
+  // ══════════════════════════════════════
+  var loginError = $("login-error");
+  var loginBtn = $("login-btn");
+
+  function setLoginError(msg) {
+    loginError.textContent = msg || "";
+    loginError.style.display = msg ? "block" : "none";
+  }
+
+  function doLogin(username, password) {
+    setLoginError("");
+    loginBtn.disabled = true;
+    loginBtn.textContent = "登录中...";
+    var rememberMe = $("login-remember-me") ? $("login-remember-me").checked : false;
+    fetch("/api/wasm/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: username,
+        password: password,
+        remember_me: rememberMe,
+        device_name: navigator.userAgent
+      })
+    }).then(function (r) {
+      return r.json().then(function (body) { return { status: r.status, body: body }; });
+    }).then(function (res) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = "确认登录";
+      var body = res.body || {};
+      if (body.success) {
+        // 记住我：device_token 由后端写入 HttpOnly cookie，前端不再存储
+        window.location.href = "/chat";
+      } else {
+        setLoginError(body.error || "登录失败");
+      }
+    }).catch(function (err) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = "确认登录";
+      setLoginError("网络错误：" + (err.message || err));
+    });
+  }
+
+  loginForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var username = $("login-username").value.trim();
+    var pwField = $("login-password");
+    var password = pwField.value;
+    var agreed = $("login-agree-terms").checked;
+
+    // 记住我模式：密码 disabled → 走 auto-login（device_token 通过 HttpOnly Cookie 携带）
+    if (pwField.disabled) {
+      setLoginError("");
+      loginBtn.disabled = true;
+      loginBtn.textContent = "自动登录中...";
+      fetch("/api/wasm/auto-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).then(function (r) {
+        return r.json().then(function (body) { return { status: r.status, body: body }; });
+      }).then(function (res) {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "确认登录";
+        var body = res.body || {};
+        if (body.success) {
+          window.location.href = "/chat";
+        } else {
+          pwField.disabled = false;
+          pwField.value = "";
+          pwField.placeholder = "密码";
+          setLoginError("记住我已失效，请重新输入密码登录");
+        }
+      }).catch(function (err) {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "确认登录";
+        setLoginError("网络错误：" + (err.message || err));
+      });
+      return;
+    }
+
+    if (!agreed) { setLoginError("请先阅读并同意使用守则"); return; }
+    if (!username) { setLoginError("请输入用户名"); return; }
+    if (!password) { setLoginError("请输入密码"); return; }
+    doLogin(username, password);
+  });
+
+  // ══════════════════════════════════════
+  // REGISTER
+  // ══════════════════════════════════════
+  var regError = $("register-error");
+  var regSubmit = $("register-submit");
+
+  function setRegError(msg) {
+    regError.textContent = msg || "";
+  }
+  function setRegSubmitting(busy) {
+    regSubmit.disabled = busy;
+    regSubmit.textContent = busy ? "创建中..." : "创建账号";
+  }
+
+  // Password strength
+  // FIX password-strength (2026-07-21): 4 档评分（0/1/2/3），与后端 auth.rs check_password_strength 对齐：
+  //   - 弱口令黑名单 → score 1（红）
+  //   - 必填未过（len<8/无大写/无小写/无数字）→ score 1（红）
+  //   - 必填全过 + len<12 → score 2（中）
+  //   - 必填全过 + len≥12 → score 3（强）
+  // 移除特殊符号要求（已与后端 FIX 问题二对齐），仅展示 4 项必填。
+  function calcStrength(pw) {
+    if (!pw) return { score: 0, label: "", color: "transparent", items: [] };
+    var lower = pw.toLowerCase();
+    if (WEAK.indexOf(lower) >= 0) {
+      return {
+        score: 1, label: "弱口令，请更换", color: "#e74c3c",
+        items: [
+          { text: "不在弱口令黑名单", ok: false }
+        ]
+      };
+    }
+    var hasU = /[A-Z]/.test(pw);
+    var hasL = /[a-z]/.test(pw);
+    var hasD = /\d/.test(pw);
+    var len = pw.length;
+    var items = [
+      { text: "长度 ≥ 8 位", ok: len >= 8 },
+      { text: "包含大写字母 A-Z", ok: hasU },
+      { text: "包含小写字母 a-z", ok: hasL },
+      { text: "包含数字 0-9", ok: hasD }
+    ];
+    var requiredOk = len >= 8 && hasU && hasL && hasD;
+    if (!requiredOk) {
+      return {
+        score: 1, label: "未满足全部必填项", color: "#e74c3c", items: items
+      };
+    }
+    if (len >= 12) {
+      return { score: 3, label: "强", color: "#27ae60", items: items };
+    }
+    return { score: 2, label: "中", color: "#f39c12", items: items };
+  }
+  function updateStrength() {
+    var pw = $("register-password").value;
+    var s = calcStrength(pw);
+    var bar = $("register-strength-bar");
+    var label = $("register-strength-label");
+    bar.style.width = (s.score === 0 ? 0 : s.score === 1 ? 33 : s.score === 2 ? 66 : 100) + "%";
+    bar.style.backgroundColor = s.color;
+    if (!pw) {
+      label.textContent = "";
+      label.style.color = "";
+    } else {
+      var lines = s.items.map(function(it) {
+        return (it.ok ? "✓" : "✗") + " " + it.text;
+      });
+      label.innerHTML = lines.join("<br>") + (s.label ? '<br><strong style="color:' + s.color + '">强度: ' + s.label + '</strong>' : '');
+      label.style.color = "var(--text-secondary)";
+    }
+  }
+
+  // Load terms version + registration status
+  // FIX register-state-machine (2026-07-21): 精细化状态切换
+  //   - closed: 显示 closed div，隐藏 form
+  //   - 未 closed: form 可见，按 allow_invite 切邀请码 group；允许开放注册时清空邀请码
+  // FIX login-tab-register-leak (2026-07-21): 不再直接修改 register-form/closed 的 display，
+  //   统一通过 _renderRegisterPane 渲染，login tab 下保证注册面板整体隐藏。
+  function loadTermsAndStatus() {
+    Promise.all([
+      fetch("/api/wasm/terms").then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch("/api/wasm/register-status").then(function (r) { return r.json(); }).catch(function () { return null; })
+    ]).then(function (results) {
+      var terms = results[0];
+      var status = results[1];
+      if (terms && terms.success) {
+        termsVersion = terms.version || "1.0";
+        $("register-terms-version").textContent = "v" + termsVersion;
+      }
+      if (!status || !status.success) {
+        // API 失败：保持 form 默认 hidden，等用户切到注册 tab 再按需展开
+        return;
+      }
+      _regClosed = !!status.closed;
+      _regAllowInvite = !!status.allow_invite;
+      _regStatusLoaded = true;
+      _renderRegisterPane();
+    }).catch(function () {});
+  }
+
+  // Submit register
+  registerForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    setRegError("");
+    var username = $("register-username").value.trim();
+    var password = $("register-password").value;
+    var confirm = $("register-confirm").value;
+    var invite = $("register-invite").value.trim();
+    var agreed = $("register-agree").checked;
+
+    if (!agreed) { setRegError("请先阅读并勾选同意使用守则"); return; }
+    if (username.length < 3 || username.length > 32 ||
+        !/^[A-Za-z0-9_]+$/.test(username)) {
+      setRegError("用户名只能包含字母、数字、下划线，长度 3-32 位"); return;
+    }
+    if (RESERVED.indexOf(username.toLowerCase()) >= 0) {
+      setRegError("该用户名为系统保留名，请更换"); return;
+    }
+    if (password.length < 8) { setRegError("密码长度至少 8 位"); return; }
+    if (password !== confirm) { setRegError("两次输入的密码不一致"); return; }
+    if (!invite) { setRegError("请输入邀请码"); return; }
+
+    setRegSubmitting(true);
+    fetch("/api/wasm/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: username,
+        password: password,
+        confirm_password: confirm,
+        agreed_terms_ver: termsVersion,
+        invite_code: invite || null
+      })
+    }).then(function (r) {
+      return r.json().then(function (body) { return { status: r.status, body: body }; });
+    }).then(function (res) {
+      setRegSubmitting(false);
+      var body = res.body || {};
+      if (body.success) {
+        window.location.href = "/chat";
+      } else {
+        setRegError(body.error || body.message || "注册失败");
+      }
+    }).catch(function (err) {
+      setRegSubmitting(false);
+      setRegError("网络错误：" + (err.message || err));
+    });
+  });
+
+  // ── Events ──
+  $("register-password").addEventListener("input", updateStrength);
+  $("register-password").addEventListener("blur", updateStrength);
+  $("register-username").addEventListener("input", function () {
+    var v = $("register-username").value.trim().toLowerCase();
+    if (v && RESERVED.indexOf(v) >= 0) {
+      setRegError("该用户名为系统保留名，请更换");
+    } else {
+      var cur = $("register-error").textContent;
+      if (cur === "该用户名为系统保留名，请更换") setRegError("");
+    }
+  });
+
+  // ── 记住我：检查 Cookie 中是否有 device_token，有则预填用户名 ──
+  // device_token 通过 HttpOnly Cookie 下发，JS 无法读取 token 值，
+  // 仅通过 auto-login 接口验证。这里仅设置 UI 状态（预填用户名、禁用密码输入）。
+  (function() {
+    // Cookie 中 device_token 是否存在由后端接口判断，前端仅做 UI 初始化
+    var unameEl = $("login-username");
+    var pwEl = $("login-password");
+    if (unameEl && pwEl) {
+      // 页面加载时尝试 auto-login（带 cookie），成功直接跳转；失败由用户手动登录
+      fetch("/api/wasm/auto-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).then(function (r) {
+        return r.json();
+      }).then(function (body) {
+        if (body && body.success) {
+          window.location.href = "/chat";
+        }
+      }).catch(function () {});
+    }
+  })();
+
+  // 记住我：用户修改用户名时重新启用密码输入
+  $("login-username").addEventListener("input", function () {
+    var pwEl = $("login-password");
+    if (pwEl.disabled) {
+      pwEl.disabled = false;
+      pwEl.value = "";
+      pwEl.placeholder = "密码";
+    }
+  });
+
+  // Init
+  loadTermsAndStatus();
+
+  // 使用守则链接已改为直接跳转 /terms 页面（HTML href）
+})();
+</script>
+
+<div id="doc-viewer-panel" class="doc-viewer-panel">
+    <div class="doc-viewer-header">
+        <button id="doc-viewer-toc-btn" class="doc-viewer-toc-btn" aria-label="目录"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <button id="doc-viewer-back-btn" class="doc-viewer-back-btn" aria-label="关闭"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span id="doc-viewer-title" class="doc-viewer-title">文档</span>
+    </div>
+    <div class="doc-viewer-body">
+        <aside id="doc-viewer-toc" class="doc-viewer-toc"><nav id="doc-viewer-toc-list"></nav></aside>
+        <div class="doc-viewer-scroll"><div id="doc-viewer-content" class="doc-viewer-content loading">正在加载...</div></div>
+    </div>
+</div>
+<script src="/static/zn-site.js"></script>
+</body>
+</html>

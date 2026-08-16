@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>使用守则 · Zyn iLink ChatBox · WongMod</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  /* terms 页专属：当 JS 不可用时显示的 fallback */
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; min-height: 100vh; min-height: 100dvh;
+    background: var(--chat-bg);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .terms-fallback {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 72px 24px 32px;
+    text-align: center;
+    color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+<div id="terms-fallback" class="terms-fallback" style="display:none">
+  <h1>使用守则</h1>
+  <p>文档查看器加载失败，请刷新页面重试。</p>
+</div>
+
+<div id="doc-viewer-panel" class="doc-viewer-panel show">
+    <div class="doc-viewer-header">
+        <button id="doc-viewer-toc-btn" class="doc-viewer-toc-btn" aria-label="目录"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <button id="doc-viewer-back-btn" class="doc-viewer-back-btn" aria-label="返回注册页">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span id="doc-viewer-title" class="doc-viewer-title">使用守则</span>
+    </div>
+    <div class="doc-viewer-body">
+        <aside id="doc-viewer-toc" class="doc-viewer-toc"><nav id="doc-viewer-toc-list"></nav></aside>
+        <div class="doc-viewer-scroll">
+            <div id="doc-viewer-content" class="doc-viewer-content loading">正在加载守则...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    "use strict";
+    if (typeof window._openDocViewer === "function") {
+        window._openDocViewer("terms", { showActions: true });
+    } else {
+        var fallback = document.getElementById("terms-fallback");
+        if (fallback) fallback.style.display = "block";
+        var content = document.getElementById("doc-viewer-content");
+        if (content) {
+            content.className = "doc-viewer-content error";
+            content.textContent = "文档查看器加载失败，请刷新页面重试。";
+        }
+    }
+})();
+</script>
+</body>
+</html>

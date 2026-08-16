@@ -1,0 +1,27 @@
+# 统一换行符：Linux 脚本必须 LF（curl|bash 依赖），Windows 脚本保持 CRLF
+* text=auto
+
+*.sh   text eol=lf
+*.ps1  text eol=crlf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# 源码与文档
+*.rs   text
+*.toml text
+*.lock text
+*.md   text
+*.html text
+*.css  text
+*.js   text
+*.py   text
+*.yml  text
+
+# 二进制
+*.png  binary
+*.jpg  binary
+*.svg  text
+*.ico  binary
+*.exe  binary
+*.zip  binary
+*.db   binary
