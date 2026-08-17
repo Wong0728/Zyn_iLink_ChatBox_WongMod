@@ -243,7 +243,7 @@ impl BotManager {
     //   返回 None 表示：无 bot 在线，或所有 bot 都未配置 webhook。
     pub fn webhook_status(&self) -> Option<(Vec<String>, bool, u64)> {
         let bots = self.bots.read();
-        for (_, bot) in bots.iter() {
+        for bot in bots.values() {
             let guard = bot.webhook_dispatcher.read();
             if let Some(ref d) = *guard {
                 return Some(d.get_status());
