@@ -478,7 +478,7 @@ fn tunnel_reader_loop(
                 if let Some(url) = extract_serveo_url(&line) {
                     let mut guard = inner.lock();
                     guard.public_url = Some(url.clone());
-                    push_log(&mut guard, format!("公网地址: {}", &url));
+                    push_log(&mut guard, format!("公网地址: {}", url));
                     tracing::info!("[TUNNEL] 公网地址: {}", url);
                     // web 层 Origin 校验放行该隧道域名的浏览器请求。
                     set_public_origin(Some(url));
