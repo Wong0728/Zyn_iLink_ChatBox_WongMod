@@ -93,9 +93,23 @@ cargo build --release
 
 - 调试产物：`target/debug/ilink-wm1`（或 Windows 下的 `target\debug\ilink-wm1.exe`）
 - 发布产物：`target/release/ilink-wm1`（或 `.exe`）
-- 项目附带 `run_test.py`（Python 脚本）可一键编译并启动：`python run_test.py [--release] [--build-only]`
+- 项目附带 `run_test.py`（开发辅助脚本，会自动同步 `web/` 到 target 目录）可一键编译并启动：`python run_test.py [--release] [--build-only]`
 
-> Windows 路径含中文时 Cargo 可能输出乱码，可设 `CARGO_TARGET_DIR` 为纯 ASCII 路径规避。
+> **Windows 路径含中文时 Cargo 可能输出乱码**——把 `CARGO_TARGET_DIR` 指向纯 ASCII 路径即可：
+>
+> ```powershell
+> # PowerShell
+> $env:CARGO_TARGET_DIR = "C:\ilink-wm1-target"
+> cargo build --release
+> ```
+>
+> ```cmd
+> :: cmd
+> set CARGO_TARGET_DIR=C:\ilink-wm1-target
+> cargo build --release
+> ```
+>
+> 或者直接用 `run_test.py`——它已经把 `CARGO_TARGET_DIR` 指向项目内的 `target/`（仍含中文但能跑通）。
 
 ### 1.4 首次启动向导
 
@@ -1010,14 +1024,17 @@ sudo systemctl start ilink
 
 ### 4.4 反馈与支持
 
-- 本仓库：<https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod>
-- 原仓库：<https://github.com/zynsync/Zyn-iLink-ChatBox>
-- 协议生态参考：<https://github.com/openilink>
-- 预编译下载：[Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases)（各平台 zip 附 `.sha256` 校验）
-- 安全披露：见 [SECURITY.md](SECURITY.md)
-- 代码规范：见项目根 `代码规范.md`
-
-如发现 bug 或有功能建议，请先查阅审计日志与本指南的"故障排查"章节，确认非配置问题后再反馈。
+- 🐛 **Bug 报告**：[GitHub Issues › New › Bug Report](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/issues/new?template=bug_report.md)
+- 💡 **功能建议**：[GitHub Issues › New › Feature Request](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/issues/new?template=feature_request.md)
+- 🔒 **安全漏洞**：[SECURITY.md](SECURITY.md)（**请勿公开 Issue**；走 GitHub Security Advisories 或维护者主页私密渠道）
+- 💬 **使用问题**：先查本文档「故障排查」§3.8 + 搜索 [现有 Issue](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/issues?q=is%3Aissue)，仍无解再开新 Issue
+- 🤝 **贡献代码**：见 [CONTRIBUTING.md](CONTRIBUTING.md)（含本地构建、commit 规范、PR 流程）
+- 📦 **预编译下载**：[Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases)（各平台 zip 附 `.sha256` 校验）
+- 📖 **项目链接**：
+  - 本仓库：<https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod>
+  - 原仓库（Python 单文件版）：<https://github.com/zynsync/Zyn-iLink-ChatBox>
+  - 协议生态参考：<https://github.com/openilink>
+- 📐 **代码规范**：见项目根 `代码规范.md`
 
 ---
 
