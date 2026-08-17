@@ -1,0 +1,92 @@
+name: CI
+
+# PR + push main 时触发：对源码做轻量检查
+#  - cargo fmt --check（格式）
+#  - cargo clippy（lint 警告即失败；Windows 暂以 continue-on-error 跑，
+#    因为不同 MSVC 工具链可能误报，等代码稳定后改为强失败）
+#  - cargo build（编译）
+#
+# 注意：本项目当前没有单元测试（src/ 下 #[cfg(test)] 几乎为空），
+# 暂不跑 cargo test；待补测试后追加 step。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+jobs:
+  check:
+    name: Lint + Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.os }}
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (warnings as errors)
+        # 临时让 Windows 通过：MSVC clippy 偶发对 utf8 / Windows API 头文件告警
+        # 后续稳定后删掉 continue-on-error
+        run: cargo clippy --all-targets --locked -- -D warnings
+        continue-on-error: ${{ matrix.os == 'windows-latest' }}
+
+      - name: Build
+        run: cargo build --locked
+
+  readme:
+    name: README link check (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check internal links
+        run: |
+          set -e
+          # 简单 sanity check：所有 .md 引用的相对路径必须存在
+          # 排除 URL 形式（http/https）与锚点
+          python3 - <<'PY'
+          import re, pathlib
+          root = pathlib.Path(".")
+          md_files = list(root.rglob("*.md"))
+          # 跳过被 .gitignore 屏蔽的目录
+          skip = {"target", "node_modules", "分发"}
+          bad = []
+          for md in md_files:
+              if any(s in md.parts for s in skip):
+                  continue
+              for link in re.findall(r"\]\(([^)]+)\)", md.read_text(encoding="utf-8")):
+                  if link.startswith(("http://", "https://", "#", "mailto:")):
+                      continue
+                  # 去掉锚点
+                  path = link.split("#", 1)[0]
+                  if not path:
+                      continue
+                  target = (md.parent / path).resolve()
+                  if not target.exists():
+                      bad.append(f"{md}: -> {link}")
+          if bad:
+              print("Broken internal links:")
+              for b in bad:
+                  print(" ", b)
+              raise SystemExit(1)
+          print(f"OK: {len(md_files)} markdown files checked")
+          PY
