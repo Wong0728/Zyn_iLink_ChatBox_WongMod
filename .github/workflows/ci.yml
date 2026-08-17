@@ -62,7 +62,7 @@ jobs:
         run: |
           set -e
           # 简单 sanity check：所有 .md 引用的相对路径必须存在
-          # 排除 URL 形式（http/https）与锚点
+          # 排除：URL（http/https）、GitHub 渲染时插入的 blob/tree 路径、纯锚点、mailto
           python3 - <<'PY'
           import re, pathlib
           root = pathlib.Path(".")
@@ -74,7 +74,12 @@ jobs:
               if any(s in md.parts for s in skip):
                   continue
               for link in re.findall(r"\]\(([^)]+)\)", md.read_text(encoding="utf-8")):
+                  # 跳过外部 URL 与纯锚点
                   if link.startswith(("http://", "https://", "#", "mailto:")):
+                      continue
+                  # 跳过 GitHub 风格的 blob/<branch>/ 与 tree/<branch>/ 链接
+                  # （这些是 GitHub 渲染时自动加的，仓库里没那个目录）
+                  if re.search(r"^\.\./\.\./(blob|tree)/", link) or re.search(r"^(blob|tree)/", link):
                       continue
                   # 去掉锚点
                   path = link.split("#", 1)[0]

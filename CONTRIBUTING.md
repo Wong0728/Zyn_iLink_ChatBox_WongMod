@@ -31,8 +31,8 @@
 
 ## 提 Issue
 
-- 🐛 **Bug 报告**：用 [.github/ISSUE_TEMPLATE/bug_report.md](../../blob/main/.github/ISSUE_TEMPLATE/bug_report.md)
-- 💡 **功能建议**：用 [.github/ISSUE_TEMPLATE/feature_request.md](../../blob/main/.github/ISSUE_TEMPLATE/feature_request.md)
+- 🐛 **Bug 报告**：用 [.github/ISSUE_TEMPLATE/bug_report.md](.github/ISSUE_TEMPLATE/bug_report.md)
+- 💡 **功能建议**：用 [.github/ISSUE_TEMPLATE/feature_request.md](.github/ISSUE_TEMPLATE/feature_request.md)
 - 🔒 **安全漏洞**：见 [SECURITY.md](SECURITY.md) 的私密报告渠道（**勿公开 Issue**）
 
 ## 本地构建

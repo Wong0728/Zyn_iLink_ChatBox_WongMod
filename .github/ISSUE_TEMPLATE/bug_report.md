@@ -8,7 +8,7 @@ assignees: ''
 
 > 提交前必读：
 > 1. 先查 [README 故障排查章节](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod#38-故障排查) + [现有 Issue](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/issues?q=is%3Aissue)
-> 2. 安全漏洞请走 [SECURITY.md](../../blob/main/SECURITY.md) 的私密渠道，**勿公开 Issue**
+> 2. 安全漏洞请走 [SECURITY.md](../SECURITY.md) 的私密渠道，**勿公开 Issue**
 
 ## 概要
 
