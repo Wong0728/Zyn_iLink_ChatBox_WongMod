@@ -1,0 +1,14 @@
+# CODEOWNERS：指定每个路径的 owner
+# PR 改动触及这些路径时自动 @ 这些 owner 请求 review
+# 语法：path_pattern  @user_or_team
+
+# 默认 owner：所有改动都需要 Wong0728 审核
+*       @Wong0728
+
+# 安全敏感路径：双重 owner 邀请（占位，按需扩展）
+# /src/auth.rs        @Wong0728
+# /src/crypto.rs      @Wong0728
+# /src/webhook.rs     @Wong0728
+# /deploy/            @Wong0728
+# /SECURITY.md        @Wong0728
+# /.github/workflows/ @Wong0728
