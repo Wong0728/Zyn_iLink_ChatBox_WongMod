@@ -31,6 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 
 安装完成后即可使用 `iLinkWM` 命令：直接运行 `iLinkWM` 启动程序；`iLinkWM install-service` 注册系统服务；`iLinkWM update` 自更新；`iLinkWM uninstall` 卸载（**默认连同数据目录一起删除**，保留数据请用 `--keep-data`，均有确认提示）；`iLinkWM help` 查看全部子命令。详见 [deploy/](deploy/) 与本文档第一章。
 
+> Windows 端命令入口为 PowerShell 脚本（需 PowerShell 5.1+，安装器会自动把 `.PS1` 加入用户 PATHEXT 并在需要时放行本地脚本执行策略）；本项目已全面弃用 cmd 批处理。随包附带的 `start.ps1`（启动）与 `install-service.ps1`（注册服务）同为 PowerShell 脚本。
+
 > 一键脚本优先下载 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 预编译包（附 SHA-256 校验）；无可用包（或对应架构缺失）时自动回退到「克隆源码 + cargo 编译」模式。
 
 ### 参考项目（致谢）

@@ -49,13 +49,18 @@ def main():
     skip_exe = "--skip-exe" in sys.argv
     DIST.mkdir(exist_ok=True)
 
+    # PS 5.1 以 -File 运行无 BOM 的 UTF-8 脚本时中文乱码；随包 .ps1 必须带 BOM
+    for f in ("start.ps1", "install-service.ps1"):
+        if not (ROOT / f).read_bytes().startswith(b"\xef\xbb\xbf"):
+            sys.exit(f"[package] {f} 缺少 UTF-8 BOM（PS 5.1 -File 中文必需），请勿移除文件头 BOM")
+
     # ── 源码包 ────────────────────────────────────────────
     src_zip = DIST / f"ilink_wm_v{ver}_src.zip"
     with zipfile.ZipFile(src_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         add_dir(zf, ROOT / "src")
         add_dir(zf, ROOT / "web")
         for f in ("Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md",
-                  "start.bat", "install-service.bat", "代码规范.md", "用户协议.md", "部署指南.md"):
+                  "start.ps1", "install-service.ps1", "代码规范.md", "用户协议.md", "部署指南.md"):
             add_file(zf, ROOT / f)
         # 服务器部署脚本以包内 install.sh 身份随行（同 3.2.3 轮次）
         add_file(zf, ROOT / "deploy" / "linux" / "install-server.sh", "install.sh")
@@ -70,8 +75,8 @@ def main():
         with zipfile.ZipFile(win_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             add_dir(zf, ROOT / "web")
             add_file(zf, exe, "ilink-wm1.exe")
-            for f in ("LICENSE", "README.md", "CHANGELOG.md", "start.bat",
-                      "install-service.bat", "用户协议.md", "部署指南.md"):
+            for f in ("LICENSE", "README.md", "CHANGELOG.md", "start.ps1",
+                      "install-service.ps1", "用户协议.md", "部署指南.md"):
                 add_file(zf, ROOT / f)
         print(f"[package] {win_zip.name}（{win_zip.stat().st_size/1024/1024:.1f} MB）")
 

@@ -20,7 +20,7 @@
 ## 二、快速开始
 
 ### Windows
-双击 `scripts\setup-cf.bat`（或在该目录开 PowerShell 执行）：
+在该目录打开 PowerShell 执行（脚本会引导浏览器授权，无需手动配置）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File cf-setup.ps1

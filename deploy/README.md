@@ -19,9 +19,12 @@
 
 | 平台 | 程序目录 | 命令入口（均在 PATH） | 数据目录 |
 |------|----------|----------|----------|
-| Windows | `%LOCALAPPDATA%\Programs\iLinkWM` | `...\iLinkWM\bin\`（`iLinkWM.cmd` + `ilink-wm1.cmd`，自动加入用户 PATH） | `...\iLinkWM\data` |
+| Windows | `%LOCALAPPDATA%\Programs\iLinkWM` | `...\iLinkWM\bin\`（`iLinkWM.ps1` + `ilink-wm1.ps1`，自动加入用户 PATH，并把 `.PS1` 追加进用户 PATHEXT） | `...\iLinkWM\data` |
 | Linux / macOS | `~/.local/share/iLinkWM` | `~/.local/bin/`（`iLinkWM` + `ilink-wm1`） | `~/.local/share/iLinkWM/data` |
 | Termux | `$PREFIX/share/iLinkWM` | `$PREFIX/bin/`（`iLinkWM` + `ilink-wm1`） | `$PREFIX/share/iLinkWM/data` |
+
+> Windows 命令入口为 PowerShell 脚本（**PowerShell 5.1+ / PowerShell 7 均可，cmd.exe 不适用**）。
+> 安装器会在需要时把当前用户执行策略设为 `RemoteSigned` 以放行本地脚本。
 
 ## 一键安装
 

@@ -71,6 +71,14 @@
 - README / Hero 页同步修正：过时的「Release 尚未发布」提示、`/api/wasm/guide` 实际读取 `部署指南.md`、补全 `iLinkWM uninstall` 数据删除语义与 Releases 入口。
 - Pages 页面补 favicon。
 
+### 第五轮（2026-08-17）：全面 PowerShell 化，弃用 cmd
+
+- Windows 命令垫片改为 `bin\iLinkWM.ps1` / `bin\ilink-wm1.ps1`（中文提示回归，UTF-8 带 BOM）。安装器把 `.PS1` 追加进用户 PATHEXT，PowerShell 中可直接裸敲 `iLinkWM` / `ilink-wm1`；需要时把当前用户执行策略设为 `RemoteSigned` 以放行本地脚本。升级安装会自动清理旧轮次生成的 `.cmd` 垫片。
+- `start.bat` / `install-service.bat` 移除，等价移植为 `start.ps1` / `install-service.ps1`：NSSM 固定版本下载 + ZIP/EXE 双重 SHA-256 校验、`NT SERVICE` 低权虚拟账户、icacls 目录授权、HTTPS 反代 / 受信内网安全模式选择等逻辑保持一致；中文提示回归；`install-service.ps1` 非管理员运行时自动请求 UAC 提权。
+- `scripts/setup-cf.bat` 移除（统一用 `powershell -ExecutionPolicy Bypass -File cf-setup.ps1`）。
+- 卸载 / 服务管理等子命令全部原生 PowerShell 实现，不再派生 cmd.exe；cmd.exe 不再是受支持的外壳（PowerShell 5.1+ / PowerShell 7 均可）。
+- `deploy/package.py` 打包前校验 `.ps1` 均带 UTF-8 BOM，防止未来编辑误删导致 PS 5.1 中文乱码。
+
 ---
 
 ## 与原版（Zyn iLink ChatBox Python 版）的差异

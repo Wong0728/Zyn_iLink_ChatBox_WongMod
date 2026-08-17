@@ -94,7 +94,7 @@ pub fn validate_system_setting(key: &str, value: &str) -> anyhow::Result<()> {
 /// 采用机器作用域（CRYPTPROTECT_LOCAL_MACHINE）而非用户作用域：
 ///   - 解决审计威胁：数据目录整体泄露（备份/打包/误传/磁盘离线挂载）时，
 ///     无本机 DPAPI 密钥无法解出主密钥，AES-GCM 不再被"密文+密钥同目录"击穿；
-///   - 兼容服务/CLI 分体运行（install-service.bat 以管理员跑 `admin init`、
+///   - 兼容服务/CLI 分体运行（install-service.ps1 以管理员跑 `admin init`、
 ///     服务以 NT SERVICE 虚拟账户运行），用户作用域会导致服务解不开密钥；
 ///   - 同机其他本地用户仍被文件 ACL（icacls 仅当前用户/服务账户）挡在读文件这层。
 #[cfg(windows)]

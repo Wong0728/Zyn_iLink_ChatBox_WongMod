@@ -54,7 +54,7 @@ jobs:
           cp -r web "$STAGE/"
           cp LICENSE README.md CHANGELOG.md 用户协议.md 部署指南.md "$STAGE/"
           if [[ "${{ matrix.name }}" == "windows-x64" ]]; then
-            cp start.bat install-service.bat "$STAGE/"
+            cp start.ps1 install-service.ps1 "$STAGE/"
           fi
           cd "$STAGE"
           OUT="../ilink_wm_v${VER}_${{ matrix.zip_suffix }}.zip"
