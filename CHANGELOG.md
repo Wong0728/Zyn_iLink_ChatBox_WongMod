@@ -1,7 +1,65 @@
 # 更新日志（CHANGELOG）
 
 本项目版本号跟随上游原版节奏：`v<原版版本>-wm<重构序号>`。
-当前版本：**v3.2.4-wm1.0**（Rust 重构第 1 轮发布，对应原版 v3.2.4 时代）。
+当前版本：**v3.2.4-wm1.1**（仓库治理与安全加固轮次，无功能新增）。
+
+---
+
+## v3.2.4-wm1.1（2026-08-18）
+
+仓库治理与安全加固轮次，**无功能改动**。重点：消除审查中发现的 17 项风险点。
+
+### 修复
+
+- `start.ps1` 默认监听地址 `0.0.0.0` → `127.0.0.1`（与 README §1.4「最安全」一致）。公网监听仍可手动设 `ILINK_HOST=0.0.0.0` + 通过脚本内安全确认 + `ILINK_ALLOW_INSECURE_PUBLIC=1`。
+- `release.yml`：`generate_release_notes: true` 替换为从 `CHANGELOG.md` 自动抽取对应版本段（解决"Full Changelog 链接重复 16 次"问题）。
+- README §1.3 给出 `CARGO_TARGET_DIR` 显式命令（之前只说"可设…"）。
+- README §4.4 引导用户开 GitHub Issue 反馈（之前只说"如发现 bug…"）。
+- `start.ps1` 注释新增"为何默认 127.0.0.1 + 怎么扩到公网"。
+
+### 新增
+
+- `.github/workflows/ci.yml`：PR + push main 触发 `cargo fmt --check` + `cargo clippy` + `cargo build`（多平台）。
+- `.github/ISSUE_TEMPLATE/bug_report.md` + `feature_request.md`：规范化反馈入口。
+- `.github/PULL_REQUEST_TEMPLATE.md`：PR 提交清单（验证步骤、关联 Issue、兼容性影响）。
+- `.github/CODEOWNERS`：默认 owner 为 `@Wong0728`。
+- `.github/dependabot.yml`：每周自动检查 `cargo` + `github-actions` 依赖更新。
+- `CONTRIBUTING.md`：贡献流程（分支、commit 规范、本地构建、PR 流程）。
+
+### 仓库设置（API 操作）
+
+- main 分支启用 **branch protection**：
+  - `allow_force_pushes = false`（防止历史被重写）
+  - `required_linear_history = true`（禁止 merge commit）
+  - `required_status_checks` 包含 `CI / Lint + Build (ubuntu-latest)` 与 `CI / Lint + Build (windows-latest)`
+  - `required_pull_request_reviews: required_approving_review_count = 1`
+- 启用 `web_commit_signoff_required`（要求所有贡献者签署 DCO）。
+- 关闭 `has_projects` / `has_wiki`（项目早期不使用，减少干扰）。
+- 手动编辑 release `v3.2.4` 的 body：清掉 16 次重复的 `Full Changelog` 链接，替换为「请升级到 v3.2.4-wm1.1+」提示。
+
+### 关于历史 force-push 的公开说明
+
+> 首次 release（2026-08-16 17:25 UTC）后，早期 4 个 commit 通过 `git push --force` 被替换：
+>
+> | 旧 SHA（已弃） | 替换原因 |
+> |---|---|
+> | `bd3a2efd` security 修复 | 含 2 个错提交文件：`安全审计报告_2026-08-16.md`、`分发/SHA256SUMS.txt` |
+> | `a3e01ea0` fix(ci) package.py | 内容被新 `553789d6` 覆盖（内容相同） |
+> | `8560b296` fix(installer) CRLF | 内容被新 `11e83c6b` 覆盖（内容相同） |
+> | `8604e5a9` docs: 云端发布指南更新 | 整条 commit 丢失，文件调整为内部材料不入仓 |
+>
+> 替换后 SHA 全变化（`7d5c42a1` / `553789d6` / `11e83c6b` / `431e0a53`），但内容大致相同。Pages 部署历史里仍记录旧 SHA，**跳转会 404**。
+>
+> 自 v3.2.4-wm1.1 起，main 分支启用 branch protection + `allow_force_pushes=false`，不再发生 force-push。
+>
+> **审计参考**：详见仓库根 `安全审计报告_2026-08-18_云端仓库审查.md`（该文件被 .gitignore 屏蔽，外部不可访问）。
+
+### 已知遗留
+
+- `run_test.py`（5.9 KB，仓库根目录）—— 开发辅助脚本，README §1.3 已说明角色，**保留**。
+- `web/landing.html`（19 KB）—— Rust 服务的 `/` 路由；与 `docs/hero/ilinkwm_hero.html`（GitHub Pages）功能互补，**保留**。
+- `reference/Zyn-iLink-ChatBox-v3.2.4.py`（750 KB）—— 原版 Python 单文件，作对照参考；下次大版本可考虑改用 git submodule 或单独仓库。
+- e3b1aa7b commit 含 GBK ↔ UTF-8 字节对位错乱 diff（`install-service.bat +97 -97` 零和）—— 历史可读性问题，无法清理。
 
 ---
 
