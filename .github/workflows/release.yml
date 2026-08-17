@@ -2,6 +2,8 @@ name: Release
 
 # 推送 v* 标签时触发：多平台编译 + 自动打包 + 创建 GitHub Release
 # 供 deploy/ 下的一键安装脚本（iLinkWM / ilink-wm1）下载使用。
+# Release body 从 CHANGELOG.md 自动抽取对应版本段（替代 auto-generated
+# "Full Changelog" 链接，避免重复累加）。
 on:
   push:
     tags:
@@ -76,10 +78,33 @@ jobs:
           python3 deploy/package.py --skip-exe
           mv 分发/*.zip 分发/*.sha256 .
 
+      - name: Extract CHANGELOG body
+        id: changelog
+        if: matrix.name == 'linux-x64'
+        shell: bash
+        run: |
+          # 从 GITHUB_REF_NAME 提取版本号（如 v3.2.4-wm1.1 -> 3.2.4-wm1.1）
+          # 然后从 CHANGELOG.md 抽取 `## <版本>` 到下一个 `## ` 之间的内容
+          VER="${GITHUB_REF_NAME#v}"
+          OUT="$RUNNER_TEMP/release-body.md"
+          # 用 awk 找 ## 行；目标行打印直到下一个 ## 开头
+          awk -v target="^## ${VER}( |$)" '
+            $0 ~ target { capture=1; print; next }
+            capture && /^## / { capture=0 }
+            capture { print }
+          ' CHANGELOG.md > "$OUT"
+          if [ ! -s "$OUT" ]; then
+            echo "WARN: CHANGELOG.md 中未找到 ## ${VER} 段，release body 将用默认文案" >&2
+            echo "## ${VER}" > "$OUT"
+            echo "" >> "$OUT"
+            echo "暂无 changelog 内容，请查阅 [CHANGELOG.md](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/blob/main/CHANGELOG.md) 获取完整变更记录。" >> "$OUT"
+          fi
+          echo "body_path=$OUT" >> "$GITHUB_OUTPUT"
+
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             *.zip
             *.sha256
-          generate_release_notes: true
+          body_path: ${{ steps.changelog.outputs.body_path }}
