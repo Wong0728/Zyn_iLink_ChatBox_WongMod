@@ -697,7 +697,7 @@ fn sleep_while_active(inner: &Arc<Mutex<TunnelInner>>, total_secs: u64) -> bool 
     while remaining > 0 {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let guard = inner.lock();
-        if !(guard.auto_reconnect && !guard.stop_requested) {
+        if !guard.auto_reconnect || guard.stop_requested {
             return false;
         }
         remaining = remaining.saturating_sub(1);

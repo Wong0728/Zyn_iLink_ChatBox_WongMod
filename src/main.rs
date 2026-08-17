@@ -214,7 +214,7 @@ fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Op
                 std::env::var("ILINK_OWNER_PASSWORD_FILE")
                     .ok()
                     .filter(|p| !p.is_empty())
-                    .map(|p| {
+                    .and_then(|p| {
                         std::fs::read_to_string(&p)
                             .map(|c| c.trim_end_matches(['\r', '\n']).to_string())
                             .map_err(|e| {
@@ -224,7 +224,6 @@ fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Op
                             .ok()
                             .filter(|c| !c.is_empty())
                     })
-                    .flatten()
             });
 
         // 用户名
