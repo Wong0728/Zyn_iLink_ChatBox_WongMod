@@ -20,7 +20,11 @@ $root       = $PSScriptRoot
 $binPath    = Join-Path $root 'ilink-wm1.exe'
 $webDir     = Join-Path $root 'web'
 $defaultPort = 8888
-if (-not $env:ILINK_HOST)     { $env:ILINK_HOST = '0.0.0.0' }
+# 默认仅监听本机（与 README §1.4「最安全」一致）。如需公网访问请：
+#   1. 显式设 $env:ILINK_HOST='0.0.0.0'（或 LAN IP）
+#   2. 配 HTTPS 反代 + ILINK_TRUSTED_PROXIES + ILINK_FORCE_HTTPS=1
+#   3. 或在内网测试时在下方安全确认输入 YES
+if (-not $env:ILINK_HOST)     { $env:ILINK_HOST = '127.0.0.1' }
 if (-not $env:ILINK_PORT)     { $env:ILINK_PORT = $defaultPort }
 if (-not $env:ILINK_DATA_DIR) { $env:ILINK_DATA_DIR = Join-Path $root 'data' }
 if (-not $env:RUST_LOG)       { $env:RUST_LOG = 'ilink_wm1=info' }
