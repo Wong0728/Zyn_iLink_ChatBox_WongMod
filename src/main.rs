@@ -175,7 +175,9 @@ fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Op
             "3" => {
                 bind_host = Some("[::]".to_string());
                 println!("  ✓ 已选择双栈模式（IPv4 + IPv6）");
-                println!("  ⚠ 公网 IPv6 直连场景请设置 ILINK_ALLOW_INSECURE_PUBLIC=1 跳过公网守卫，");
+                println!(
+                    "  ⚠ 公网 IPv6 直连场景请设置 ILINK_ALLOW_INSECURE_PUBLIC=1 跳过公网守卫，"
+                );
                 println!("    或配置 TLS 反向代理 + ILINK_TRUSTED_PROXIES + ILINK_FORCE_HTTPS=1。");
                 println!("    Windows 防火墙放行示例: netsh advfirewall firewall add rule name=\"ilink-wm\" dir=in action=allow protocol=TCP localport=8888");
             }

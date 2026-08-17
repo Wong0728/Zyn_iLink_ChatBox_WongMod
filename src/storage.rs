@@ -271,9 +271,7 @@ fn get_master_key(db_path: &Path) -> anyhow::Result<Vec<u8>> {
         let username = std::env::var("USERNAME")
             .or_else(|_| std::env::var("USER"))
             .map_err(|_| {
-                anyhow::anyhow!(
-                    "无法获取用户名环境变量 (USERNAME/USER),拒绝以默认权限保存主密钥"
-                )
+                anyhow::anyhow!("无法获取用户名环境变量 (USERNAME/USER),拒绝以默认权限保存主密钥")
             })?;
         let key_path_str = key_path.to_string_lossy().to_string();
         let grant = format!("{}:F", username);

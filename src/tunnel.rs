@@ -364,11 +364,7 @@ fn spawn_ssh(inner: Arc<Mutex<TunnelInner>>) -> Result<(), String> {
         if guard.stop_requested || !guard.auto_reconnect {
             return Err("隧道已被停止，取消拉起".to_string());
         }
-        (
-            guard.subdomain.clone(),
-            guard.remote_port,
-            guard.local_port,
-        )
+        (guard.subdomain.clone(), guard.remote_port, guard.local_port)
     };
     // 转发目标显式用 127.0.0.1 而非 localhost：双栈机器上 localhost 可能先解析
     // 到 ::1，若服务仅监听 IPv4 需等连接失败后才回退；::1 被防火墙 DROP 时
@@ -559,9 +555,7 @@ fn tunnel_reader_loop(
             let guard = inner.lock();
             (
                 guard.consecutive_failures,
-                guard.auto_reconnect
-                    && !guard.stop_requested
-                    && guard.generation == my_generation,
+                guard.auto_reconnect && !guard.stop_requested && guard.generation == my_generation,
             )
         };
         if !proceed {
@@ -587,10 +581,7 @@ fn tunnel_reader_loop(
         let delay = backoff_delay_secs(failures);
         {
             let mut guard = inner.lock();
-            push_log(
-                &mut guard,
-                format!("连接断开，{}s 后自动重连", delay),
-            );
+            push_log(&mut guard, format!("连接断开，{}s 后自动重连", delay));
         }
         // 分片休眠：每秒检查一次 stop/generation，保证退避期间 stop() 秒级生效。
         if !sleep_while_active(&inner, delay) {
@@ -621,10 +612,7 @@ fn tunnel_reader_loop(
 /// 关键错误（转发失败/拒绝访问/连接类错误）同时写入 UI 日志（inner.logs）：
 /// ExitOnForwardFailure 触发退出前，用户需要在前端看到真实原因，
 /// 而不是只看到"连接断开，重连中"。其余行仅进 tracing，避免刷屏占满日志容量。
-fn tunnel_stderr_loop(
-    inner: Arc<Mutex<TunnelInner>>,
-    stderr: impl std::io::Read + Send + 'static,
-) {
+fn tunnel_stderr_loop(inner: Arc<Mutex<TunnelInner>>, stderr: impl std::io::Read + Send + 'static) {
     let reader = BufReader::new(stderr);
     for line in reader.lines() {
         match line {
@@ -727,8 +715,8 @@ fn assign_child_to_kill_on_close_job(child: &Child) {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
-        SetInformationJobObject, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
 
     // HANDLE 为裸指针（非 Send/Sync），以 usize 存放；整个进程复用同一个 job。

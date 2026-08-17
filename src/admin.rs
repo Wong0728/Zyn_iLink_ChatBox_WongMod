@@ -1104,26 +1104,31 @@ fn cmd_tunnel(auth: &Auth, cmd: &TunnelCmd) -> anyhow::Result<()> {
             // 审计 M-4: 开隧道 = 把本地端口暴露公网，属破坏性操作，纳入 S10 二次确认
             confirm_admin_identity(
                 auth,
-                &format!("启动内网穿透隧道（本地端口 {} → serveo 远程端口 {}）", port, remote),
+                &format!(
+                    "启动内网穿透隧道（本地端口 {} → serveo 远程端口 {}）",
+                    port, remote
+                ),
             )?;
             match tm.start(*port, *remote, subdomain) {
-            Ok(()) => {
-                println!("  ✓ 隧道已启动");
-                println!("    本地端口 : {}", port);
-                println!("    远程端口 : {}", remote);
-                if !subdomain.is_empty() {
-                    println!("    子域名   : {}", subdomain);
-                    println!(
-                        "    公网 URL : https://{}.serveo.net (约 30s 后生效)",
-                        subdomain
-                    );
-                } else {
-                    // serveo 对未指定子域名的连接分配随机子域名（与端口号无关），
-                    // 实际地址以隧道 stdout 提取结果为准。
-                    println!("    公网 URL : 由 serveo 随机分配，请用 `admin tunnel status` 查看");
+                Ok(()) => {
+                    println!("  ✓ 隧道已启动");
+                    println!("    本地端口 : {}", port);
+                    println!("    远程端口 : {}", remote);
+                    if !subdomain.is_empty() {
+                        println!("    子域名   : {}", subdomain);
+                        println!(
+                            "    公网 URL : https://{}.serveo.net (约 30s 后生效)",
+                            subdomain
+                        );
+                    } else {
+                        // serveo 对未指定子域名的连接分配随机子域名（与端口号无关），
+                        // 实际地址以隧道 stdout 提取结果为准。
+                        println!(
+                            "    公网 URL : 由 serveo 随机分配，请用 `admin tunnel status` 查看"
+                        );
+                    }
                 }
-            }
-            Err(e) => println!("  ✗ 启动失败: {}", e),
+                Err(e) => println!("  ✗ 启动失败: {}", e),
             }
         }
         TunnelCmd::Stop => match tm.stop() {

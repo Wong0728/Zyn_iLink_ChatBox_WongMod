@@ -1099,7 +1099,12 @@ fn real_client_ip(headers: &HeaderMap, direct: Option<IpAddr>) -> IpAddr {
             let last = LAST_LOOPBACK_PROXY_WARN.load(std::sync::atomic::Ordering::Relaxed);
             if now_secs.saturating_sub(last) >= 600
                 && LAST_LOOPBACK_PROXY_WARN
-                    .compare_exchange(last, now_secs, std::sync::atomic::Ordering::Relaxed, std::sync::atomic::Ordering::Relaxed)
+                    .compare_exchange(
+                        last,
+                        now_secs,
+                        std::sync::atomic::Ordering::Relaxed,
+                        std::sync::atomic::Ordering::Relaxed,
+                    )
                     .is_ok()
             {
                 tracing::warn!(
@@ -2037,10 +2042,13 @@ async fn api_admin_user_create(
                 "admin.user.create",
                 Some(&format!("uid={}", uid)),
                 // L-15：JSON 字段经 serde_json 转义（防引号破坏结构）
-                Some(&serde_json::json!({
-                    "username": body.username,
-                    "role": allowed_role
-                }).to_string()),
+                Some(
+                    &serde_json::json!({
+                        "username": body.username,
+                        "role": allowed_role
+                    })
+                    .to_string(),
+                ),
             );
             Ok(Json(serde_json::json!({
                 "success": true, "uid": uid, "username": body.username, "role": allowed_role
@@ -2127,11 +2135,14 @@ async fn api_admin_user_disable(
         "admin.user.disable",
         Some(&format!("uid={}", u.id)),
         // L-15：JSON 字段经 serde_json 转义（防引号破坏结构）
-        Some(&serde_json::json!({
-            "username": u.username,
-            "sessions_revoked": sessions_ok,
-            "device_tokens_revoked": device_tokens_ok
-        }).to_string()),
+        Some(
+            &serde_json::json!({
+                "username": u.username,
+                "sessions_revoked": sessions_ok,
+                "device_tokens_revoked": device_tokens_ok
+            })
+            .to_string(),
+        ),
     );
     Ok(Json(serde_json::json!({
         "success": true,
@@ -2559,7 +2570,11 @@ async fn api_admin_ip_ban(
         .into_response());
     }
     let days = if body.days > 0 { Some(body.days) } else { None };
-    if let Err(error) = state.system_db.ban_ip(&network, &body.reason, &format!("uid={}", user.uid), days) {
+    if let Err(error) =
+        state
+            .system_db
+            .ban_ip(&network, &body.reason, &format!("uid={}", user.uid), days)
+    {
         // L-14：内部错误详情进日志，客户端只收通用消息（防内部信息泄露）
         tracing::error!("[WEB] ban_ip 失败 {}: {}", network, error);
         return Err((
@@ -6062,7 +6077,11 @@ async fn api_export_history(
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(64)
         .collect();
-    let safe_id = if safe_id.is_empty() { "chat".to_string() } else { safe_id };
+    let safe_id = if safe_id.is_empty() {
+        "chat".to_string()
+    } else {
+        safe_id
+    };
     let disposition = format!("attachment; filename=\"chat-{}.html\"", safe_id);
     (
         StatusCode::OK,

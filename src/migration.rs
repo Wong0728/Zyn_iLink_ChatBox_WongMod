@@ -157,7 +157,11 @@ pub fn migrate_legacy_to_multiuser(system_db: &SystemDatabase) -> anyhow::Result
                     .join("\n")
             );
             if let Err(we) = fs::write(&report_path, report) {
-                tracing::warn!("[MIGRATION] 跳过报告写入失败 {}: {}", report_path.display(), we);
+                tracing::warn!(
+                    "[MIGRATION] 跳过报告写入失败 {}: {}",
+                    report_path.display(),
+                    we
+                );
             }
             tracing::warn!(
                 "[MIGRATION] 共 {} 张表未复制，报告已写入 {}",
