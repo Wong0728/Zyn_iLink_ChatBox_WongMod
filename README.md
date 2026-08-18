@@ -42,7 +42,20 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 | [zynsync/Zyn-iLink-ChatBox](https://github.com/zynsync/Zyn-iLink-ChatBox) | 原项目：基于微信官方 iLink 接口的 Python 单文件客户端，本项目由其移植重构 |
 | [openilink](https://github.com/openilink) | 开源 iLink 协议生态参考（协议文档与实现思路） |
 
-与原版的差异对比见 [CHANGELOG.md](CHANGELOG.md) 与 [Hero 页面](https://wong0728.github.io/Zyn_iLink_ChatBox_WongMod/)。
+### 与原版的关键差异
+
+| 对比项 | 原版 Python v3.2.4 | WongMod Rust v3.2.4-wm1.1 |
+|--------|--------------------|---------------------------|
+| 形态 | 单文件 Python，启动时自动 pip 装依赖 | 单二进制零依赖（Rust 全量重构） |
+| 用户 | 全局 Web 密码 / 平级多账号（无角色） | owner-admin-user 三级 + 邀请码 + 配额 |
+| 存储 | JSON 文件 | SQLite 分库，自动迁移老库 |
+| 消息 | 文本/图片/视频/文件/语音（收） | 全部支持收发（含语音发送）+ 持久化 + HTML 导出 |
+| AI | 自动回复 / 识图 / 生图 / 文件识别 | 不内置（预留 Webhook 扩展，见 CHANGELOG） |
+| 新增 | — | WebDAV 外置、Webhook、审计日志、限流、WebSocket 推送、CLI/服务化 |
+| 移除 | 邮箱验证找回、二维码门户、远程 Gitee 内容、控制台直发 | — |
+| 安全 | 基础口令 | PBKDF2 600k、AES-256-GCM、CSRF/SSRF 防护、审计（0 高危） |
+
+> 完整逐项对比（继承强化 / 新增 / 移除 / 行为差异四张表）见 [Hero 页面对比区](https://wong0728.github.io/Zyn_iLink_ChatBox_WongMod/#compare) 与 [CHANGELOG.md](CHANGELOG.md) 差异章节。
 
 ---
 
