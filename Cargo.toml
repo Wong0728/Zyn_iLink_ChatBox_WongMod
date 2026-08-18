@@ -32,7 +32,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Crypto
-aes = "0.8"
+aes = "0.9"
 aes-gcm = "0.10"
 pbkdf2 = "0.12"
 sha2 = "0.10"
