@@ -18,7 +18,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # cargo-audit v0.22.2 依赖 kstring 2.0.4 要求 Rust ≥1.96.0，
-      # 而 rust-toolchain.toml 固定了 1.95.0，此处显式装 stable 覆盖。
+      # 而 rust-toolchain.toml 固定了 1.95.0。删除 toolchain 文件让 audit
+      # 工具使用 runner 自带的最新 stable，不受仓库锁定影响。
+      - name: Remove pinned toolchain for audit tools
+        run: rm rust-toolchain.toml
+
       - name: Install Rust stable for audit tools
         uses: dtolnay/rust-toolchain@stable
 
