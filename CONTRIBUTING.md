@@ -15,7 +15,9 @@
    ```bash
    cargo fmt --all
    cargo clippy --all-targets --locked -- -D warnings
-   cargo build --release
+   cargo test --all-targets --locked
+   cargo deny check
+   cargo build --release --locked
    ```
 5. **Commit message** 用 [Conventional Commits](https://www.conventionalcommits.org/) 风格：
    ```
@@ -37,7 +39,7 @@
 
 ## 本地构建
 
-- Rust 工具链：stable（`rustup toolchain install stable`）
+- Rust 工具链：仓库 `rust-toolchain.toml` 固定的 Rust 1.95.0（`rustup toolchain install 1.95.0`）
 - Windows：`rustup default stable-x86_64-pc-windows-msvc` + 安装 Build Tools
 - 依赖：项目根目录 `cargo build --release`
 - 路径含中文时 Cargo 可能乱码，设 `CARGO_TARGET_DIR=C:\ilink-wm1-target`

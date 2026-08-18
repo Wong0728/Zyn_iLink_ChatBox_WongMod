@@ -3,14 +3,14 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Termux-lightgrey)](#)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](#)
-[![Version](https://img.shields.io/badge/Version-v3.2.4--wm1.0-brightgreen.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-v3.2.4--wm1.1-brightgreen.svg)](CHANGELOG.md)
 [![Hero](https://img.shields.io/badge/GitHub%20Pages-Hero%20页面-8A2BE2)](https://wong0728.github.io/Zyn_iLink_ChatBox_WongMod/)
 
 > 微信官方 iLink 协议 · 开源消息管理平台（Zyn iLink ChatBox 的 Rust 重构版）。
 > 一个二进制启动，零外部依赖，内置 SQLite 零配置。
 > 支持多用户、Web 实时聊天、WebDAV 云存储、消息历史、审计日志与全局通知。
 
-**版本**：v3.2.4-wm1.0 · 基于 Zyn iLink ChatBox v3.1.9 移植，随原版 v3.2.4 对照演进
+**版本**：v3.2.4-wm1.1 · 基于 Zyn iLink ChatBox v3.1.9 移植，随原版 v3.2.4 对照演进
 **原作者**：ZynSync · **修改者**：Mr.Wong（Rust 重构）
 **本仓库**：<https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod>
 **原仓库**：<https://github.com/zynsync/Zyn-iLink-ChatBox>
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 
 > Windows 端命令入口为 PowerShell 脚本（需 PowerShell 5.1+，安装器会自动把 `.PS1` 加入用户 PATHEXT 并在需要时放行本地脚本执行策略）；本项目已全面弃用 cmd 批处理。随包附带的 `start.ps1`（启动）与 `install-service.ps1`（注册服务）同为 PowerShell 脚本。
 
-> 一键脚本优先下载 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 预编译包（附 SHA-256 校验）；无可用包（或对应架构缺失）时自动回退到「克隆源码 + cargo 编译」模式。
+> 一键脚本默认固定到 `v3.2.4-wm1.1`，从 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 下载预编译包并校验 SHA-256；无可用包（或对应架构缺失）时从同名 tag 回退到「克隆源码 + cargo 编译」。只有显式设置 `ILINKWM_VERSION=latest` 才跟随浮动版本。
 
 ### 参考项目（致谢）
 
@@ -64,7 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 | 项 | 要求 |
 |----|------|
 | 操作系统 | Windows 10+ / Linux（x86_64、aarch64）/ macOS / Termux（Android） |
-| Rust 工具链 | `rustup` + `cargo`（推荐 stable 最新版；使用预编译 Release 时无需） |
+| Rust 工具链 | `rustup` + `cargo`（源码编译使用仓库固定的 Rust 1.95.0；使用预编译 Release 时无需） |
 | 磁盘 | ≥ 500 MB（编译产物 + 数据库 + 媒体缓存） |
 | 内存 | ≥ 256 MB 空闲 |
 | 浏览器 | Chrome 90+ / Edge 90+ / Safari 14+ / Firefox 88+，需启用 Cookie 与 JavaScript |
@@ -77,7 +77,7 @@ git clone https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod.git
 cd Zyn_iLink_ChatBox_WongMod
 ```
 
-> 若部署在内网无 git 的服务器，从 Releases 下载 `ilink_wm_v3.2.4_src.zip` 解压即可，源码即部署包。
+> 若部署在内网无 git 的服务器，从 Releases 下载 `ilink_wm_v3.2.4-wm1.1_src.zip` 解压即可，源码即部署包。
 
 ### 1.3 编译
 
@@ -175,6 +175,8 @@ ilink-wm1 admin config set setup_complete 0
 ```
 
 > 默认不写入 `%APPDATA%` 或 `/var/lib`，卸载只需删除整个目录。
+
+> `web/landing.html` 是 Rust 服务运行时的 `/` 首页；`docs/hero/ilinkwm_hero.html` 是 GitHub Pages 宣传页。两者职责不同，前者随安装包分发，后者由 Pages 单独发布。
 
 ### 1.6 环境变量速查
 

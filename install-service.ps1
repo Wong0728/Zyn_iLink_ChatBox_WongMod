@@ -183,7 +183,7 @@ if ($LASTEXITCODE -ne 0) {
 $dataDir = Join-Path $root 'data'
 if ($securityMode -eq '1') {
     & $nssmExe set $serviceName AppEnvironmentExtra `
-        "ILINK_HOST=0.0.0.0" "ILINK_PORT=$defaultPort" "ILINK_DATA_DIR=$dataDir" `
+        "ILINK_HOST=127.0.0.1" "ILINK_PORT=$defaultPort" "ILINK_DATA_DIR=$dataDir" `
         "ILINK_SERVER_MODE=1" "ILINK_TRUSTED_PROXIES=$trustedProxy" "ILINK_FORCE_HTTPS=1" `
         "RUST_LOG=ilink_wm1=info" "RUST_BACKTRACE=full"
 } else {
@@ -229,7 +229,8 @@ Write-Host ''
 Write-Host "  服务名称：  $serviceName"
 Write-Host "  运行账户：  NT SERVICE\$serviceName（低权虚拟账户）"
 Write-Host "  二进制：    $appExe"
-Write-Host "  监听地址：  0.0.0.0:$defaultPort"
+$listenHost = if ($securityMode -eq '1') { '127.0.0.1' } else { '0.0.0.0' }
+Write-Host "  监听地址：  ${listenHost}:$defaultPort"
 Write-Host "  数据目录：  $dataDir"
 Write-Host "  日志文件：  $logDir\service.log"
 Write-Host ''
