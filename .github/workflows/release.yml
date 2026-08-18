@@ -164,7 +164,7 @@ jobs:
             sha256sum -c "$sidecar"
             sha256sum "$archive" >> SHA256SUMS.txt
           done
-          sha256sum -c <(sed 's#^#./#' SHA256SUMS.txt)
+          sha256sum -c SHA256SUMS.txt
           cd ..
           printf 'release_body=%s\n' "$BODY_PATH" >> "$GITHUB_OUTPUT"
 
