@@ -31,6 +31,15 @@
     .compare-table td:first-child { color: var(--text-secondary); white-space: nowrap; font-weight: 600; }
     .compare-table .yes { color: var(--accent); font-weight: 600; }
     .compare-table .no { color: var(--text-tertiary); }
+    .compare-table .removed { color: var(--danger); font-weight: 600; }
+    .compare-table .diff { color: var(--warning); font-weight: 600; }
+    .compare-table td.dim { color: var(--text-tertiary); }
+
+    .compare-group-title { font-size: 15px; font-weight: 700; color: var(--text-secondary); margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+    .compare-group-title::before { content: ''; width: 4px; height: 14px; border-radius: 2px; background: var(--accent); flex-shrink: 0; }
+    .compare-group-title.warn::before { background: var(--warning); }
+    .compare-group-title.danger::before { background: var(--danger); }
+    .compare-note { margin-top: 14px; font-size: 12.5px; color: var(--text-tertiary); }
 
     .cmd-card { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; text-align: left; }
     .cmd-card + .cmd-card { margin-top: 16px; }
@@ -273,27 +282,120 @@
   <div class="reveal">
     <span class="section-label">Compare</span>
     <h2 class="section-title">对比原版：一次认真的 Rust 重构</h2>
-    <p class="section-subtitle">原版 Zyn iLink ChatBox（Python 单文件，最新 v3.2.4）是轻量的单用户客户端；WongMod 把它重构成了可部署的多用户平台，并完成一轮全量安全审计。</p>
+    <p class="section-subtitle">原版 Zyn iLink ChatBox（Python 单文件，最新 v3.2.4）是轻量的多账号客户端；WongMod 把它重构成了可部署的多用户平台。下面从「定位总览、继承强化、新增、移除、行为差异」五个维度完整对比——包括我们刻意没有移植的东西。</p>
   </div>
+
   <div class="reveal reveal-delay-1" style="margin-top:32px;">
+    <h3 class="compare-group-title">定位总览</h3>
     <div class="compare-table-wrap">
       <table class="compare-table">
         <thead>
           <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
         </thead>
         <tbody>
-          <tr><td>运行形态</td><td class="no">Python 3.7+，需 pip 安装 qrcode / pycryptodomex / pilk</td><td class="yes">单二进制 + web/ 目录，零运行时依赖</td></tr>
-          <tr><td>用户体系</td><td class="no">单用户（Web 访问密码）</td><td class="yes">owner / admin / user 三级角色、邀请码注册、设备令牌</td></tr>
-          <tr><td>存储</td><td class="no">文件 + 单库</td><td class="yes">SQLite 分库（系统库 + 用户库）、配额、LRU 媒体清理</td></tr>
-          <tr><td>密码与凭证</td><td class="no">基础口令保护</td><td class="yes">PBKDF2 600k 迭代 · AES-256-GCM 加密 · Windows DPAPI 密钥包装</td></tr>
-          <tr><td>审计与合规</td><td class="no">—</td><td class="yes">全量管理操作审计日志（默认 90 天）· S10 破坏性命令二次确认</td></tr>
-          <tr><td>服务化运维</td><td class="no">手动运行 / 启动器热更新</td><td class="yes">systemd / NSSM 服务 · iLinkWM 统一命令行 · Cloudflare 隧道脚本</td></tr>
-          <tr><td>内网穿透</td><td class="no">—</td><td class="yes">内置 SSH 反向隧道（带端口白名单与二次确认）</td></tr>
-          <tr><td>安全审计</td><td class="no">—</td><td class="yes">静态全量审计：0 高危 / 11 中危（9 已修复、2 风险接受），漏洞披露见 SECURITY.md</td></tr>
+          <tr><td>运行形态</td><td>Python 3.7+，启动时自动 pip 安装依赖（qrcode / pycryptodomex，含国内镜像探测）</td><td class="yes">单二进制 + web/ 目录，零运行时依赖</td></tr>
+          <tr><td>用户体系</td><td>可选全局 Web 密码（单用户模式），或平级多账号（每账号一个微信 bot，无角色、无配额）</td><td class="yes">owner / admin / user 三级角色、邀请码注册、配额与功能开关、每用户独立 bot</td></tr>
+          <tr><td>存储</td><td>JSON 文件（config / messages / media_cache 散落目录）</td><td class="yes">SQLite 分库（system.db + 每用户 user.db）、自动迁移、配额、LRU 媒体清理</td></tr>
+          <tr><td>密码与凭证</td><td>PBKDF2 100k 迭代（账号模式）</td><td class="yes">PBKDF2 600k 迭代 · AES-256-GCM 凭证加密 · Windows DPAPI 主密钥包装</td></tr>
+          <tr><td>消息能力</td><td>文本/图片/视频/文件/语音（收）收发，轮询界面</td><td class="yes">同等收发 + 语音发送 + SQLite 持久化 + 发送状态机 + HTML 导出</td></tr>
+          <tr><td>审计与合规</td><td>—</td><td class="yes">全量管理操作审计日志（默认 90 天）· S10 破坏性命令二次确认</td></tr>
+          <tr><td>服务化运维</td><td>手动运行 / 启动器热更新</td><td class="yes">systemd / NSSM 服务 · iLinkWM 统一命令行 · 一键安装器（SHA-256 校验）</td></tr>
+          <tr><td>内网穿透</td><td>Serveo SSH 隧道（serveo.net，管理端可开关）</td><td class="yes">内置 Serveo 隧道（加固：断线重连、子域校验、二次确认）</td></tr>
+          <tr><td>安全审计</td><td>—</td><td class="yes">静态全量审计：0 高危 / 11 中危（9 已修复、2 风险接受），漏洞披露见 SECURITY.md</td></tr>
           <tr><td>开源协议</td><td>Apache-2.0</td><td>Apache-2.0（合规标注原仓库与原作者）</td></tr>
         </tbody>
       </table>
     </div>
+  </div>
+
+  <div class="reveal reveal-delay-1" style="margin-top:32px;">
+    <h3 class="compare-group-title">① 继承并强化 · 原版有，WongMod 有且更完善</h3>
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>微信绑定</td><td>扫码登录、添加联系人二维码（120 秒有效）</td><td>扫码登录 + 会话过期检测与一键重新扫码（reauth）+ 一个账号可绑定多个微信 bot</td></tr>
+          <tr><td>消息类型</td><td>文字 / 图片 / 视频 / 文件 / 语音（收）</td><td>五种类型全部支持收发——语音发送在原版中函数未接线、界面无入口，WongMod 已完整接通</td></tr>
+          <tr><td>打字指示</td><td>输入中状态（sendtyping）</td><td>输入中状态 + 收消息自动回执去抖（25 秒）</td></tr>
+          <tr><td>媒体链路</td><td>CDN 加密上传/下载、SILK/AMR→WAV 转码、缓存与预取</td><td>同链路 + 客户端直传（预签名 URL）、MD5 去重、7 天 TTL、5GB LRU 清理</td></tr>
+          <tr><td>消息历史</td><td>内存上限 500 条/用户、总计 2000 条</td><td>SQLite 全量持久化、游标分页、按联系人清空/删除、HTML 导出</td></tr>
+          <tr><td>多微信账号</td><td>单进程多账号（accounts 注册表），共享一套 Web 界面</td><td>每 Web 用户独立 bot 实例互不干扰，可绑定多个微信账号</td></tr>
+          <tr><td>公告通知</td><td>管理员公告以【系统公告】文本消息群发到联系人</td><td>全局通知 + 分级广播（info / warn / error），WebSocket 推送并持久化</td></tr>
+          <tr><td>IP 封禁</td><td>banned_ips.json 列表，请求级 403</td><td>IP/CIDR 封禁（可带过期时间）、30 秒缓存、fail-closed</td></tr>
+          <tr><td>内网穿透</td><td>Serveo SSH 隧道（serveo.net）</td><td>同 Serveo，加固：指数退避自动重连、子域校验、公网来源自动加入放行名单</td></tr>
+          <tr><td>平台支持</td><td>Windows / Linux / macOS / Termux（含国内 pip 镜像）</td><td>同四平台 + 官方预编译包（Win x64 / Linux x64·arm64 / macOS arm64）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="reveal reveal-delay-1" style="margin-top:32px;">
+    <h3 class="compare-group-title">② 新增 · 原版没有，WongMod 新增</h3>
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>多用户角色体系</td><td>—</td><td class="yes">owner / admin / user 三级，邀请码注册（可过期）、禁用/启用、用户名保留名单、条款同意</td></tr>
+          <tr><td>配额与功能开关</td><td>—</td><td class="yes">5 维配额（上传/下载/媒体存储/每日消息数/媒体数量）+ 3 项功能开关，逐用户配置</td></tr>
+          <tr><td>WebDAV 媒体外置</td><td>—</td><td class="yes">媒体一键迁移到用户自有 WebDAV（省磁盘）、流量节省模式、迁移进度与 ETA</td></tr>
+          <tr><td>Webhook 出站扩展</td><td>—</td><td class="yes">收消息实时转发到自定义地址（HMAC-SHA256 签名、SSRF 防护）——预留的 AI / 机器人扩展点</td></tr>
+          <tr><td>WebSocket 实时推送</td><td>—</td><td class="yes">替代 500ms 轮询：消息、状态、发送回执、二维码状态全事件实时推送</td></tr>
+          <tr><td>发送可靠性</td><td>—</td><td class="yes">发送状态机 + 5 次指数退避重试、重启后自动恢复未完成发送、失败手动补发</td></tr>
+          <tr><td>会话与设备管理</td><td>—</td><td class="yes">登录防固定、改密/禁用即时全局吊销、remember-me 设备令牌列表与撤销</td></tr>
+          <tr><td>审计日志</td><td>—</td><td class="yes">管理操作全量记录，默认保留 90 天</td></tr>
+          <tr><td>安全加固</td><td>—</td><td class="yes">密码策略 + 弱密码黑名单、全端点限流、CSRF/Origin 校验、SSRF DNS 固定、安全响应头、公网绑定启动守卫、凭证加密落库</td></tr>
+          <tr><td>运维体系</td><td>—</td><td class="yes">7 步初始化向导、CLI 管理全套、systemd / NSSM 服务、一键安装 + SHA-256 校验 + 版本固定、自更新</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="reveal reveal-delay-1" style="margin-top:32px;">
+    <h3 class="compare-group-title danger">③ 移除 / 未移植 · 原版有，WongMod 刻意不提供</h3>
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>AI 能力全家桶</td><td>自动回复（gpt-3.5-turbo）、每用户提示词与媒体记忆、识图（gpt-4o）、生图（dall-e-3）、文件识别（PDF/DOCX/XLSX/PPTX）、定时主动消息、工具调用</td><td class="removed">当前版本不内置 AI；计划以 Webhook + 外部机器人配置在后续版本提供（迁移前请确认功能覆盖）</td></tr>
+          <tr><td>邮箱验证与找回</td><td>邮箱注册、绑定邮箱、验证码 + 邮件找回密码（仅适配 QQ 邮箱，直连 QQ MX）</td><td class="removed">邮箱仅作联系方式字段；密码重置由管理员 CLI 完成</td></tr>
+          <tr><td>全局 Web 密码模式</td><td>单密码保护整个 Web 界面（含 CAPTCHA 与找回流程）</td><td class="removed">由账号体系取代；老库 web_password 自动迁移为 owner 账号</td></tr>
+          <tr><td>二维码门户</td><td>独立端口（1146）分享密码，访客扫码加微信</td><td class="removed">每个用户自行登录扫码绑定，不再需要公开门户</td></tr>
+          <tr><td>远程内容源（Gitee）</td><td>拉取远程公告 Gg.txt、教程 jc.txt、版本提示 version.txt</td><td class="removed">不拉取任何远程内容；公告由管理员本地发布，版本管理交给安装器</td></tr>
+          <tr><td>控制台直接收发</td><td>REPL 可直接给联系人发消息、/switch 切换联系人</td><td class="removed">控制台仅保留管理命令；消息收发全部收敛到 Web 界面</td></tr>
+          <tr><td>SESSION-REUSE 免密续期</td><td>无密码自动续期会话</td><td class="removed">移除，统一走会话 + 设备令牌（防会话固定）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="reveal reveal-delay-1" style="margin-top:32px;">
+    <h3 class="compare-group-title warn">④ 行为差异 · 同样的能力，实现方式不同</h3>
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>推送通道</td><td>500ms 轮询 + SSE</td><td class="diff">WebSocket 全事件推送（含发送回执）</td></tr>
+          <tr><td>存储格式</td><td>JSON 文件（无数据库）</td><td class="diff">SQLite 分库；启动时自动迁移老库（wechat_bot.db → owner 用户）</td></tr>
+          <tr><td>密码哈希</td><td>PBKDF2 100k 迭代</td><td class="diff">PBKDF2 600k 迭代，登录时自动升级旧哈希</td></tr>
+          <tr><td>默认监听</td><td>0.0.0.0:1145（端口占用自动递增）</td><td class="diff">127.0.0.1:8888（公网绑定需显式配置并过安全守卫）</td></tr>
+          <tr><td>客户端 IP 可信度</td><td>无条件信任 X-Forwarded-For（可伪造）</td><td class="diff">仅信任 ILINK_TRUSTED_PROXIES 配置的代理</td></tr>
+          <tr><td>媒体上传</td><td>base64 塞进 JSON（10MB 上限）</td><td class="diff">multipart 直传（50MB）+ 魔数校验 MIME</td></tr>
+          <tr><td>免密登录</td><td>浏览器 canvas 指纹</td><td class="diff">设备令牌（remember-me，可单独撤销）</td></tr>
+          <tr><td>公告渠道</td><td>【系统公告】微信文本群发给所有联系人</td><td class="diff">Web 通知 + 广播（不打扰微信联系人）</td></tr>
+          <tr><td>更新方式</td><td>启动器热更新</td><td class="diff">iLinkWM update：固定版本 + SHA-256 校验 + 保留数据</td></tr>
+          <tr><td>管理形态</td><td>控制台 3 个数字命令</td><td class="diff">CLI admin 全套子命令 + Web 管理面板（破坏性命令二次身份确认）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="compare-note">原版参考文件保留在仓库 <code style="font-family:var(--font-mono);">reference/Zyn-iLink-ChatBox-v3.2.4.py</code>（Apache-2.0 合规对照）。更细的迁移与升级说明见仓库 README 与 CHANGELOG。</p>
   </div>
 </section>
 
