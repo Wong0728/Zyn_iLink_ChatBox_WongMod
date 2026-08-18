@@ -69,7 +69,8 @@ function Install-FromBinary {
     Write-Info "下载并校验 $($hashAsset.name)..."
     Invoke-WebRequest -Uri $hashAsset.browser_download_url -OutFile $hashFile -TimeoutSec 60 -UseBasicParsing
     $hashLine = (Get-Content -LiteralPath $hashFile -Raw).Trim()
-    $hashMatch = [regex]::Match($hashLine, '^\s*([0-9a-fA-F]{64})\s+(.+?)\s*$')
+    # 兼容两种校验文件格式：`hash  文件名`（GNU 文本模式）与 `hash *文件名`（GNU 二进制模式，Windows runner 的 MSYS sha256sum 生成）
+    $hashMatch = [regex]::Match($hashLine, '^\s*([0-9a-fA-F]{64})\s+\*?(.+?)\s*$')
     if (-not $hashMatch.Success -or $hashMatch.Groups[2].Value.Trim() -ne $asset.name) {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
         throw "校验文件格式或文件名不匹配：$($hashAsset.name)"
@@ -120,8 +121,15 @@ function Install-FromSource {
     $tmp = Join-Path ([IO.Path]::GetTempPath()) "ilinkwm_src_$(Get-Random)"
     $sourceRef = if ($Version -and $Version -ne 'latest') { $Version } else { $Branch }
     Write-Info "克隆源码 $sourceRef 到 $tmp ..."
+    # PS 5.1 下 `2>&1` 会把 git 的 stderr 进度输出变成 ErrorRecord，
+    # 在 $ErrorActionPreference='Stop' 时直接终止脚本（NativeCommandError）；
+    # 临时降级后按退出码判断成败。
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     & git clone --depth 1 --branch $sourceRef "https://github.com/$Repo.git" $tmp 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "git clone 失败" }
+    $cloneExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($cloneExit -ne 0) { throw "git clone 失败（exit code $cloneExit）" }
 
     Write-Info "cargo build --release（首次约 3-10 分钟）..."
     Push-Location $tmp

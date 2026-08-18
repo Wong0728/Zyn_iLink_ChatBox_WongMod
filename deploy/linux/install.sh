@@ -103,7 +103,8 @@ except Exception: pass
     info "下载 ${asset_name}..."
     curl -fsSL --max-time 600 -o "${tmp}/pkg.zip" "$asset_url" || { rm -rf "$tmp"; return 1; }
     curl -fsSL --max-time 60 -o "${tmp}/pkg.zip.sha256" "$hash_url" || { rm -rf "$tmp"; return 1; }
-    expected_hash="$(awk -v name="$asset_name" '$2 == name { print tolower($1); found=1 } END { if (!found) exit 1 }' "${tmp}/pkg.zip.sha256")" || {
+    # 兼容两种校验文件格式：`hash  文件名`（GNU 文本模式）与 `hash *文件名`（GNU 二进制模式）
+    expected_hash="$(awk -v name="$asset_name" '$2 == name || $2 == "*" name { print tolower($1); found=1 } END { if (!found) exit 1 }' "${tmp}/pkg.zip.sha256")" || {
         rm -rf "$tmp"
         warn "${asset_name}.sha256 格式或文件名不匹配"
         return 1
