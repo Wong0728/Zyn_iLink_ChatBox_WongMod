@@ -5,14 +5,14 @@
 # 用法：
 #   sudo bash install.sh [源码包路径]
 #
-# 默认源码包路径：/tmp/ilink_wm_v3.2.4_src.zip
+# 默认源码包路径：/tmp/ilink_wm_v3.2.4-wm1.1_src.zip
 #
 # 脚本功能：
 #   1. 检测系统包管理器（apt / dnf / yum）
 #   2. 安装依赖：构建工具、OpenSSL、ffmpeg、OpenSSH client
 #   3. 检查预先安装的 Rust stable 工具链
 #   4. 创建 /opt/ilink 目录与 ilink 系统用户
-#   5. 解压源码到 /opt/ilink/ilink_wm_v3.2.4
+#   5. 解压源码到 /opt/ilink/ilink_wm_v3.2.4-wm1.1
 #   6. cargo build --release（显示进度）
 #   7. 设置目录权限，终端初始化 owner
 #   8. 选择安全模式，生成 /etc/ilink/env 与 /etc/systemd/system/ilink.service
@@ -49,9 +49,9 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # ── 变量 ──────────────────────────────────────────────────
-SRC_ZIP="${1:-/tmp/ilink_wm_v3.2.4_src.zip}"
+SRC_ZIP="${1:-/tmp/ilink_wm_v3.2.4-wm1.1_src.zip}"
 INSTALL_DIR="/opt/ilink"
-APP_DIR="$INSTALL_DIR/ilink_wm_v3.2.4"
+APP_DIR="$INSTALL_DIR/ilink_wm_v3.2.4-wm1.1"
 DATA_DIR="$INSTALL_DIR/data"
 SERVICE_USER="ilink"
 SERVICE_NAME="ilink"
@@ -69,8 +69,8 @@ if [[ ! -f "$SRC_ZIP" ]]; then
         SRC_FROM_GIT=1
     else
         error "源码包不存在: $SRC_ZIP（且未安装 git）"
-        echo "请先上传 ilink_wm_v3.2.4_src.zip 到服务器，或通过参数指定路径："
-        echo "  sudo bash install.sh /path/to/ilink_wm_v3.2.4_src.zip"
+        echo "请先上传 ilink_wm_v3.2.4-wm1.1_src.zip 到服务器，或通过参数指定路径："
+        echo "  sudo bash install.sh /path/to/ilink_wm_v3.2.4-wm1.1_src.zip"
         echo "或安装 git 后由脚本直接克隆：apt install git"
         exit 1
     fi
@@ -195,10 +195,12 @@ echo "  2. 仅受信任内网明文 HTTP"
 read -r -p "输入 1 或 2: " SECURITY_MODE
 SECURITY_ENV=""
 if [[ "$SECURITY_MODE" == "1" ]]; then
+    BIND_HOST="127.0.0.1"
     read -r -p "可信代理 IP/CIDR [127.0.0.1]: " TRUSTED_PROXY
     TRUSTED_PROXY="${TRUSTED_PROXY:-127.0.0.1}"
     SECURITY_ENV=$'ILINK_TRUSTED_PROXIES='"$TRUSTED_PROXY"$'\nILINK_FORCE_HTTPS=1'
 elif [[ "$SECURITY_MODE" == "2" ]]; then
+    BIND_HOST="0.0.0.0"
     read -r -p "确认端口只暴露在受信任内网？请输入 YES: " INSECURE_CONFIRM
     if [[ "$INSECURE_CONFIRM" != "YES" ]]; then
         error "未确认明文内网部署，停止安装"
@@ -217,7 +219,7 @@ cat > "$ENV_FILE" <<EOF
 # 修改后需重启服务：sudo systemctl restart ilink
 
 # 绑定地址（0.0.0.0=公网可访问，127.0.0.1=仅本机）
-ILINK_HOST=0.0.0.0
+ILINK_HOST=${BIND_HOST}
 
 # 端口
 ILINK_PORT=${DEFAULT_PORT}
@@ -285,14 +287,26 @@ fi
 # ── Step 11: 防火墙 ───────────────────────────────────────
 info "Step 11/11: 配置防火墙..."
 if command -v ufw &>/dev/null; then
-    ufw allow ${DEFAULT_PORT}/tcp
-    success "ufw 已放行 ${DEFAULT_PORT}/tcp"
+    if [[ "$BIND_HOST" == "0.0.0.0" ]]; then
+        ufw allow ${DEFAULT_PORT}/tcp
+        success "ufw 已放行 ${DEFAULT_PORT}/tcp（仅适用于已确认的受信内网模式）"
+    else
+        info "反代模式监听 127.0.0.1，不向防火墙开放应用端口"
+    fi
 elif command -v firewall-cmd &>/dev/null; then
-    firewall-cmd --permanent --add-port=${DEFAULT_PORT}/tcp
-    firewall-cmd --reload
-    success "firewalld 已放行 ${DEFAULT_PORT}/tcp"
+    if [[ "$BIND_HOST" == "0.0.0.0" ]]; then
+        firewall-cmd --permanent --add-port=${DEFAULT_PORT}/tcp
+        firewall-cmd --reload
+        success "firewalld 已放行 ${DEFAULT_PORT}/tcp（仅适用于已确认的受信内网模式）"
+    else
+        info "反代模式监听 127.0.0.1，不向防火墙开放应用端口"
+    fi
 else
-    warn "未检测到防火墙工具（ufw/firewalld），请手动放行 ${DEFAULT_PORT}/tcp"
+    if [[ "$BIND_HOST" == "0.0.0.0" ]]; then
+        warn "未检测到防火墙工具（ufw/firewalld），请手动限制并放行 ${DEFAULT_PORT}/tcp"
+    else
+        info "反代模式仅监听 127.0.0.1，无需对外放行应用端口"
+    fi
 fi
 
 # ── 获取服务器 IP ────────────────────────────────────────

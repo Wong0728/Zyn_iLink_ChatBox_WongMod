@@ -14,7 +14,7 @@
   解析成命令名导致 CommandNotFoundException。
 
   可选环境变量：
-    ILINKWM_VERSION  指定版本 tag（如 v3.2.4），默认 latest
+    ILINKWM_VERSION  指定版本 tag（如 v3.2.4-wm1.1），默认 v3.2.4-wm1.1；显式设 latest 才跟随浮动版本
     ILINKWM_METHOD   auto | binary | source（默认 auto）
 #>
 
@@ -27,6 +27,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 $Repo        = 'Wong0728/Zyn_iLink_ChatBox_WongMod'
 $Branch      = 'main'
+$DefaultVersion = 'v3.2.4-wm1.1'
 $AppId       = 'iLinkWM'
 $InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\$AppId"
 $BinDir      = Join-Path $InstallRoot 'bin'
@@ -49,14 +50,37 @@ function Install-FromBinary {
         catch { Write-Warn2 "尚无 Release（$($_.Exception.Message)）" }
     }
     $asset = $null
-    if ($rel) { $asset = $rel.assets | Where-Object { $_.name -match 'win_x64\.zip$' } | Select-Object -First 1 }
+    $hashAsset = $null
+    if ($rel) {
+        $asset = $rel.assets | Where-Object { $_.name -match 'win_x64\.zip$' } | Select-Object -First 1
+        if ($asset) {
+            $hashAsset = $rel.assets | Where-Object { $_.name -eq "$($asset.name).sha256" } | Select-Object -First 1
+        }
+    }
     if (-not $asset) { return $false }
+    if (-not $hashAsset) { throw "Release 缺少 $($asset.name).sha256，拒绝安装未校验的二进制包。" }
 
     $tmp = Join-Path ([IO.Path]::GetTempPath()) "ilinkwm_install_$(Get-Random)"
     New-Item -ItemType Directory -Path $tmp -Force | Out-Null
     $zip = Join-Path $tmp $asset.name
+    $hashFile = Join-Path $tmp "$($asset.name).sha256"
     Write-Info "下载 $($asset.name)（$([math]::Round($asset.size/1MB,1)) MB）..."
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -TimeoutSec 600 -UseBasicParsing
+    Write-Info "下载并校验 $($hashAsset.name)..."
+    Invoke-WebRequest -Uri $hashAsset.browser_download_url -OutFile $hashFile -TimeoutSec 60 -UseBasicParsing
+    $hashLine = (Get-Content -LiteralPath $hashFile -Raw).Trim()
+    $hashMatch = [regex]::Match($hashLine, '^\s*([0-9a-fA-F]{64})\s+(.+?)\s*$')
+    if (-not $hashMatch.Success -or $hashMatch.Groups[2].Value.Trim() -ne $asset.name) {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        throw "校验文件格式或文件名不匹配：$($hashAsset.name)"
+    }
+    $expectedHash = $hashMatch.Groups[1].Value.ToUpperInvariant()
+    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToUpperInvariant()
+    if ($actualHash -ne $expectedHash) {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        throw "$($asset.name) SHA-256 校验失败（实际 $actualHash，期望 $expectedHash），已停止安装。"
+    }
+    Write-Ok "SHA-256 校验通过：$actualHash"
 
     $extract = Join-Path $tmp 'extract'
     Expand-Archive -Path $zip -DestinationPath $extract -Force
@@ -83,6 +107,7 @@ function Install-FromBinary {
 }
 
 function Install-FromSource {
+    param([string]$Version)
     $git = Get-Command git -ErrorAction SilentlyContinue
     $cargo = Get-Command cargo -ErrorAction SilentlyContinue
     if (-not $cargo) {
@@ -93,8 +118,9 @@ function Install-FromSource {
     if (-not $cargo) { throw "未找到 cargo。请先安装 Rust stable（https://www.rust-lang.org/tools/install），或等待 Release 预编译包。" }
 
     $tmp = Join-Path ([IO.Path]::GetTempPath()) "ilinkwm_src_$(Get-Random)"
-    Write-Info "克隆源码到 $tmp ..."
-    & git clone --depth 1 "https://github.com/$Repo.git" $tmp 2>&1 | Out-Null
+    $sourceRef = if ($Version -and $Version -ne 'latest') { $Version } else { $Branch }
+    Write-Info "克隆源码 $sourceRef 到 $tmp ..."
+    & git clone --depth 1 --branch $sourceRef "https://github.com/$Repo.git" $tmp 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "git clone 失败" }
 
     Write-Info "cargo build --release（首次约 3-10 分钟）..."
@@ -120,7 +146,7 @@ function Install-FromSource {
         if (Test-Path $p) { Copy-Item $p $InstallRoot -Force }
     }
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-    Write-Ok "已安装（源码编译，分支 $Branch）"
+    Write-Ok "已安装（源码编译，基线 $sourceRef）"
     return $true
 }
 
@@ -332,19 +358,22 @@ function Ensure-ExecutionPolicy {
 # ── 主流程 ─────────────────────────────────────────────
 Write-Info "iLink-WM1 安装器 · 目标目录 $InstallRoot"
 $method  = if ($env:ILINKWM_METHOD)  { $env:ILINKWM_METHOD }  else { 'auto' }
-$version = if ($env:ILINKWM_VERSION) { $env:ILINKWM_VERSION } else { 'latest' }
+$version = if ($env:ILINKWM_VERSION) { $env:ILINKWM_VERSION } else { $DefaultVersion }
+if ($version -eq 'latest') {
+    Write-Warn2 '已显式选择浮动 latest；正式部署建议固定 ILINKWM_VERSION=v3.2.4-wm1.1。'
+}
 
 $ok = $false
 if ($method -eq 'binary') {
     $ok = Install-FromBinary -Version $version
     if (-not $ok) { throw "未找到可用的 Windows 预编译包（$version）" }
 } elseif ($method -eq 'source') {
-    $ok = Install-FromSource
+    $ok = Install-FromSource -Version $version
 } else {
     try { $ok = Install-FromBinary -Version $version } catch { Write-Warn2 $_ }
     if (-not $ok) {
         Write-Warn2 "回退源码编译模式..."
-        $ok = Install-FromSource
+        $ok = Install-FromSource -Version $version
     }
 }
 

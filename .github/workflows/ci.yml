@@ -1,13 +1,13 @@
 name: CI
 
-# PR + push main 时触发：对源码做轻量检查
+# PR + push main 时触发：对源码做可复现检查
 #  - cargo fmt --check（格式）
-#  - cargo clippy（lint 警告即失败；Windows 暂以 continue-on-error 跑，
-#    因为不同 MSVC 工具链可能误报，等代码稳定后改为强失败）
+#  - cargo clippy（lint 警告即失败）
 #  - cargo build（编译）
+#  - cargo test（锁定依赖，当前以编译型测试为主）
 #
-# 注意：本项目当前没有单元测试（src/ 下 #[cfg(test)] 几乎为空），
-# 暂不跑 cargo test；待补测试后追加 step。
+# Rust 版本由仓库根目录 rust-toolchain.toml 固定，避免 stable 漂移导致
+# Clippy 规则突然变化。
 on:
   pull_request:
   push:
@@ -29,15 +29,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           components: rustfmt, clippy
 
       - name: Cache cargo registry & build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           shared-key: ${{ matrix.os }}
 
@@ -45,10 +45,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy (warnings as errors)
-        # 临时让 Windows 通过：MSVC clippy 偶发对 utf8 / Windows API 头文件告警
-        # 后续稳定后删掉 continue-on-error
         run: cargo clippy --all-targets --locked -- -D warnings
-        continue-on-error: ${{ matrix.os == 'windows-latest' }}
+
+      - name: Test
+        run: cargo test --all-targets --locked
 
       - name: Build
         run: cargo build --locked

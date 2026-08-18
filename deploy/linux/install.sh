@@ -6,7 +6,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh | bash
 #
 # 可选环境变量：
-#   ILINKWM_VERSION=latest        指定版本 tag（如 v3.2.4）
+#   ILINKWM_VERSION=v3.2.4-wm1.1  指定正式版本 tag（默认）；显式 latest 才跟随浮动版本
 #   ILINKWM_METHOD=auto|binary|source
 #
 # 行为：
@@ -21,6 +21,7 @@ set -euo pipefail
 
 REPO='Wong0728/Zyn_iLink_ChatBox_WongMod'
 BRANCH='main'
+DEFAULT_VERSION='v3.2.4-wm1.1'
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 APP_ID='iLinkWM'
 
@@ -58,7 +59,7 @@ esac
 fetch_json() { curl -fsSL --max-time 30 "$1" 2>/dev/null || true; }
 
 install_from_binary() {
-    local version="${1:-latest}" rel_url asset_url asset_name
+    local version="${1:-latest}" rel_url asset_url hash_url asset_name
     if [[ "$version" == "latest" ]]; then
         rel_url="https://api.github.com/repos/${REPO}/releases/latest"
     else
@@ -69,26 +70,52 @@ install_from_binary() {
     [[ -z "$json" ]] && { warn "无法获取 Release 信息（$rel_url）"; return 1; }
 
     if command -v python3 >/dev/null 2>&1; then
-        asset_url="$(printf '%s' "$json" | python3 -c "
+        mapfile -t asset_meta < <(printf '%s' "$json" | python3 -c "
 import json,sys
 try:
     rel=json.load(sys.stdin)
+    asset=None
     for a in rel.get('assets',[]):
         n=a['name']
         if '${ARCH_TAG}' and '${ARCH_TAG}' in n and n.endswith('.zip'):
-            print(a['browser_download_url']); break
+            asset=a
+            break
+    if asset:
+        print(asset['browser_download_url'])
+        wanted=asset['name'] + '.sha256'
+        for a in rel.get('assets',[]):
+            if a['name'] == wanted:
+                print(a['browser_download_url'])
+                break
 except Exception: pass
-" 2>/dev/null || true)"
+" 2>/dev/null || true)
+        asset_url="${asset_meta[0]:-}"
+        hash_url="${asset_meta[1]:-}"
         asset_name="${asset_url##*/}"
     else
         asset_url=''
     fi
     [[ -z "$asset_url" ]] && { warn "Release 中没有 ${ARCH_TAG} 预编译包"; return 1; }
+    [[ -z "$hash_url" ]] && { warn "Release 缺少 ${asset_name}.sha256，拒绝安装未校验的二进制包"; return 1; }
 
     local tmp
     tmp="$(mktemp -d)"
     info "下载 ${asset_name}..."
     curl -fsSL --max-time 600 -o "${tmp}/pkg.zip" "$asset_url" || { rm -rf "$tmp"; return 1; }
+    curl -fsSL --max-time 60 -o "${tmp}/pkg.zip.sha256" "$hash_url" || { rm -rf "$tmp"; return 1; }
+    expected_hash="$(awk -v name="$asset_name" '$2 == name { print tolower($1); found=1 } END { if (!found) exit 1 }' "${tmp}/pkg.zip.sha256")" || {
+        rm -rf "$tmp"
+        warn "${asset_name}.sha256 格式或文件名不匹配"
+        return 1
+    }
+    [[ "$expected_hash" =~ ^[0-9a-f]{64}$ ]] || { rm -rf "$tmp"; warn "${asset_name}.sha256 不是有效 SHA-256"; return 1; }
+    actual_hash="$(sha256sum "${tmp}/pkg.zip" | awk '{print tolower($1)}')"
+    [[ "$actual_hash" == "$expected_hash" ]] || {
+        rm -rf "$tmp"
+        warn "${asset_name} SHA-256 校验失败（实际 ${actual_hash}，期望 ${expected_hash}）"
+        return 1
+    }
+    info "SHA-256 校验通过：${actual_hash}"
 
     if command -v unzip >/dev/null 2>&1; then
         unzip -q "${tmp}/pkg.zip" -d "${tmp}/extract"
@@ -109,6 +136,9 @@ except Exception: pass
 }
 
 install_from_source() {
+    local version="${1:-${VERSION:-$DEFAULT_VERSION}}"
+    local source_ref="$version"
+    [[ "$source_ref" == "latest" ]] && source_ref="$BRANCH"
     command -v git >/dev/null 2>&1 || die "未找到 git。源码安装需要 git 与 Rust 工具链（或等待 Release 预编译包）。"
     command -v cargo >/dev/null 2>&1 || [[ -x "$HOME/.cargo/bin/cargo" ]] || die "未找到 cargo。请先安装 Rust stable：
   https://www.rust-lang.org/tools/install
@@ -118,8 +148,8 @@ install_from_source() {
 
     local tmp
     tmp="$(mktemp -d)"
-    info "克隆源码到 ${tmp} ..."
-    git clone --depth 1 "https://github.com/${REPO}.git" "$tmp" >/dev/null 2>&1 || { rm -rf "$tmp"; die "git clone 失败"; }
+    info "克隆源码 ${source_ref} 到 ${tmp} ..."
+    git clone --depth 1 --branch "$source_ref" "https://github.com/${REPO}.git" "$tmp" >/dev/null 2>&1 || { rm -rf "$tmp"; die "git clone ${source_ref} 失败"; }
 
     info "cargo build --release（首次约 3-10 分钟）..."
     (cd "$tmp" && "$cargo_bin" build --release) || { rm -rf "$tmp"; die "编译失败"; }
@@ -134,7 +164,7 @@ install_from_source() {
     done
     deploy_files "$stage"
     rm -rf "$tmp"
-    success "已安装（源码编译，分支 ${BRANCH}）"
+    success "已安装（源码编译，基线 ${source_ref}）"
 }
 
 deploy_files() {
@@ -323,14 +353,17 @@ ensure_path() {
 # ── 主流程 ─────────────────────────────────────────────
 info "iLink-WM1 安装器 · 架构 $ARCH · 目标目录 $INSTALL_ROOT"
 METHOD="${ILINKWM_METHOD:-auto}"
-VERSION="${ILINKWM_VERSION:-latest}"
+VERSION="${ILINKWM_VERSION:-$DEFAULT_VERSION}"
+if [[ "$VERSION" == "latest" ]]; then
+    warn '已显式选择浮动 latest；正式部署建议固定 ILINKWM_VERSION=v3.2.4-wm1.1。'
+fi
 
 ok=0
 if [[ "$METHOD" == "binary" ]]; then
     install_from_binary "$VERSION" || die "未找到 ${ARCH_TAG} 预编译包（$VERSION）"
     ok=1
 elif [[ "$METHOD" == "source" ]]; then
-    install_from_source
+    install_from_source "$VERSION"
     ok=1
 else
     if install_from_binary "$VERSION"; then
@@ -338,7 +371,7 @@ else
     else
         warn "无可用 Release 预编译包，回退源码编译模式..."
     fi
-    [[ $ok -eq 1 ]] || install_from_source
+    [[ $ok -eq 1 ]] || install_from_source "$VERSION"
 fi
 
 write_shim

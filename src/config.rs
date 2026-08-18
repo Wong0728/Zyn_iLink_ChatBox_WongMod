@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-pub const SCRIPT_VERSION: &str = "3.2.4-wm1.0";
+pub const SCRIPT_VERSION: &str = "3.2.4-wm1.1";
 pub const SCRIPT_BASED_ON: &str = "3.1.9";
 
 pub const PBKDF2_ITERATIONS: u32 = 600_000;

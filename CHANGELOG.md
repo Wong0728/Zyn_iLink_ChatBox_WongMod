@@ -13,6 +13,11 @@
 
 - `start.ps1` 默认监听地址 `0.0.0.0` → `127.0.0.1`（与 README §1.4「最安全」一致）。公网监听仍可手动设 `ILINK_HOST=0.0.0.0` + 通过脚本内安全确认 + `ILINK_ALLOW_INSECURE_PUBLIC=1`。
 - `release.yml`：`generate_release_notes: true` 替换为从 `CHANGELOG.md` 自动抽取对应版本段（解决"Full Changelog 链接重复 16 次"问题）。
+- `release.yml`：改为矩阵构建上传 artifact、单独 publish job 一次性创建 Release，并在发布前后校验版本、5 个 zip、sidecar 与 `SHA256SUMS.txt`。
+- Windows/Linux 安装器下载预编译包后强制校验同名 `.sha256`，校验失败不会解压或覆盖旧安装；默认版本固定为 `v3.2.4-wm1.1`。
+- Windows 服务与 Linux systemd 的 HTTPS 反代模式默认监听 `127.0.0.1`，仅受信内网明文模式允许 `0.0.0.0`。
+- `Cargo.toml` / `src/config.rs` / README / Pages 宣传页统一为 `v3.2.4-wm1.1`，并补充 Apache-2.0 license 元数据。
+- 依赖锁文件升级 `anyhow 1.0.102 → 1.0.104`、`spin 0.9.8 → 0.9.9`，消除 RustSec advisory 与 yanked 版本。
 - README §1.3 给出 `CARGO_TARGET_DIR` 显式命令（之前只说"可设…"）。
 - README §4.4 引导用户开 GitHub Issue 反馈（之前只说"如发现 bug…"）。
 - `start.ps1` 注释新增"为何默认 127.0.0.1 + 怎么扩到公网"。
@@ -20,6 +25,9 @@
 ### 新增
 
 - `.github/workflows/ci.yml`：PR + push main 触发 `cargo fmt --check` + `cargo clippy` + `cargo build`（多平台）。
+- `rust-toolchain.toml`：固定 Rust 1.95.0；CI 加入 `cargo test --all-targets --locked`，Windows Clippy 改为强失败。
+- `.github/workflows/dependency-audit.yml` + `deny.toml`：接入 RustSec audit、依赖来源/许可证/重复依赖检查。
+- `.github/workflows/codeql.yml`：接入 Rust CodeQL，第三方 Action 固定 commit SHA。
 - `.github/ISSUE_TEMPLATE/bug_report.md` + `feature_request.md`：规范化反馈入口。
 - `.github/PULL_REQUEST_TEMPLATE.md`：PR 提交清单（验证步骤、关联 Issue、兼容性影响）。
 - `.github/CODEOWNERS`：默认 owner 为 `@Wong0728`。
@@ -31,7 +39,7 @@
 - main 分支启用 **branch protection**：
   - `allow_force_pushes = false`（防止历史被重写）
   - `required_linear_history = true`（禁止 merge commit）
-  - `required_status_checks` 包含 `CI / Lint + Build (ubuntu-latest)` 与 `CI / Lint + Build (windows-latest)`
+  - `required_status_checks` 包含两个平台的 `Lint + Build` 与 `CI / README link check (Linux)`
   - `required_pull_request_reviews: required_approving_review_count = 1`
 - 启用 `web_commit_signoff_required`（要求所有贡献者签署 DCO）。
 - 关闭 `has_projects` / `has_wiki`（项目早期不使用，减少干扰）。
