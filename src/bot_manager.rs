@@ -529,22 +529,6 @@ impl BotManager {
         }
     }
 
-    /// 仅检查限流状态，不增加计数。
-    ///   用于"先检查账号是否锁定，再决定是否消耗一次登录尝试"的场景。
-    ///   与 check_rate_limit 的区别：不调用 `window.push(now)`，
-    ///   避免每次"检查锁定状态"都增加一次失败计数。
-    ///   返回 true = 已超限；false = 未超限。
-    pub fn is_rate_limited(&self, key: &str, max: usize, window_secs: f64) -> bool {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs_f64();
-        let mut m = self.rate_limits.lock();
-        let window = m.entry(key.to_string()).or_default();
-        window.retain(|t| now - *t < window_secs);
-        window.len() >= max
-    }
-
     /// 清除限速记录（成功时调用）。
     /// key 是精确键；若要按前缀清（如某 uid 所有 action），用 clear_rate_limit_prefix。
     pub fn clear_rate_limit(&self, key: &str) {

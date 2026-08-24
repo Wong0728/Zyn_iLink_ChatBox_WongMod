@@ -908,6 +908,21 @@ async fn main() {
             std::process::exit(1);
         }
     }
+
+    // 服务/容器模式没有 stdin，不能进入首次运行向导。若明确提供 owner
+    // 环境凭据，则在启动 Web 服务前完成初始化；缺少凭据仍保持纯服务模式。
+    if (no_repl || is_server_mode()) && system_db.list_users().is_empty() {
+        match admin::init_owner_from_environment(&system_db) {
+            Ok(true) => tracing::info!("[MAIN] 已完成非交互 owner 初始化"),
+            Ok(false) => tracing::info!(
+                "[MAIN] 服务已启动，但尚未初始化 owner；可设置 ILINK_OWNER_USER / ILINK_OWNER_PASSWORD 后重启，或运行 ilink-wm1 admin init"
+            ),
+            Err(e) => {
+                eprintln!("[FATAL] 非交互 owner 初始化失败: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
     // Phase 2 多用户：不再创建全局 bot。
     //   1) 首次运行向导（可能创建 owner 账号）
     //   2) 解析 web_port（与 WeChatiLinkBot::new 内部读 ILINK_PORT 一致）

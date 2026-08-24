@@ -440,6 +440,10 @@ ilink-wm1 admin webset set intranet    # 或 off / open
 ```bash
 # 首次初始化 owner 账号（system.db 无用户时可用）
 ilink-wm1 admin init
+
+# 无 TTY / CI / 容器：两项环境变量齐全时不读取 stdin
+ILINK_OWNER_USER=owner ILINK_OWNER_PASSWORD='StrongPass123' \
+  ilink-wm1 admin init --non-interactive
 ```
 
 #### 3.2.2 用户管理
@@ -506,6 +510,8 @@ ilink-wm1 admin config list                   # 列出所有
 | `terms.url` | 守则外链（如飞书文档） |
 | `docs.url` | 用户文档外链（首页"文档"按钮指向） |
 | `admin.web_access` | 前端管理面板访问策略 |
+| `login_ip_rate_limit_max` / `login_ip_rate_limit_window_secs` | 登录 IP 限流次数 / 窗口（默认 `3` / `300` 秒） |
+| `login_user_rate_limit_max` / `login_user_rate_limit_window_secs` | 登录账号限流次数 / 窗口（默认 `5` / `900` 秒） |
 | `default_quota_upload_bytes` 等 | 系统默认配额（新用户继承） |
 | `default_allow_upload` 等 | 系统默认功能开关 |
 
@@ -514,11 +520,25 @@ ilink-wm1 admin config list                   # 列出所有
 ```bash
 ILINK_DATA_DIR=/absolute/path ilink-wm1           # 必须在启动前设置绝对路径
 ilink-wm1 admin server-storage show               # 查看当前实际目录
+
+# Linux 服务建议由专用账号独占数据目录（含 system.db、用户消息与媒体）
+sudo install -d -o ilink -g ilink -m 750 /var/lib/ilink
 ```
 
 > `server-storage set-local` 已废弃，因为运行时数据目录必须在打开数据库前确定。每个用户可在设置页配置自己的 WebDAV。
 
-#### 3.2.6 使用守则
+#### 3.2.6 登录限流
+
+登录限流记录保存在 `system.db`，因此配置与清除可跨 CLI 和运行中服务生效：
+
+```bash
+ilink-wm1 admin ratelimit list
+ilink-wm1 admin ratelimit clear 203.0.113.8 --user owner
+```
+
+`clear` 的 `--user` 可选；管理员知道被锁定账号时应一并提供，以同时清除账号维度的失败计数。
+
+#### 3.2.7 使用守则
 
 ```bash
 ilink-wm1 admin terms set-version <version>       # 设版本号（如 1.1）
@@ -736,7 +756,7 @@ Type=simple
 User=ilink
 WorkingDirectory=/opt/ilink
 EnvironmentFile=/etc/ilink/env
-ExecStart=/opt/ilink/ilink-wm1
+ExecStart=/opt/ilink/ilink-wm1 --no-repl
 Restart=on-failure
 RestartSec=5
 
@@ -964,6 +984,8 @@ sudo systemctl start ilink
 
 ### 4.1 路由总览
 
+完整的路径、鉴权、请求与响应约定见 [API参考.md](API参考.md)。
+
 | 路径 | 方法 | 鉴权 | 说明 |
 |------|------|------|------|
 | `/` | GET | 公开 | 首页（landing） |
@@ -997,7 +1019,23 @@ sudo systemctl start ilink
 | `/api/ws` | GET | 公开（升级后校验） | WebSocket |
 | `/static/*` | GET | 公开 | 前端静态资源（强制 no-cache） |
 
-### 4.2 system_settings 全量 key 参考
+`/healthz` 成功时返回 `{"status":"ok","version":"…","uptime_secs":0,"db_status":"ok","active_bots":0}`；数据库不可查询时返回 `503` 与 `status:"degraded"`。
+
+### 4.2 Release 完整性校验
+
+每个 Release 提供 `.sha256` 边车与 `SHA256SUMS.txt`。当仓库配置 `GPG_PRIVATE_KEY` secret 时，Release 还会提供 `SHA256SUMS.txt.asc` 和 `release-signing-key.asc`：
+
+```bash
+gpg --import release-signing-key.asc
+gpg --verify SHA256SUMS.txt.asc SHA256SUMS.txt
+sha256sum -c SHA256SUMS.txt
+```
+
+### 4.3 WebSocket 事件
+
+`/api/ws` 在升级后校验 HttpOnly session cookie。服务端发送 JSON 对象 `{ "type": "事件名", "data": { … } }`；连接建立后会推送 `status`。常见事件为 `status`（登录/会话状态）、`message`（新消息）、`user`（会话列表变化）、`notification`（全局通知）和 `sync_required`（客户端应重新拉取状态）。客户端不应依赖未知字段，并应在断线后重连再刷新 REST 状态。
+
+### 4.4 system_settings 全量 key 参考
 
 > 此表列出常见 key，敏感 key 在 CLI 与 Web 中均脱敏显示。
 
@@ -1007,6 +1045,10 @@ sudo systemctl start ilink
 | `allow_open_registration` | `on`/`off` | `off` | 开放注册 |
 | `allow_invite_registration` | `on`/`off` | `on` | 邀请码注册 |
 | `admin.web_access` | `off`/`intranet`/`open` | `intranet` | 管理面板访问策略 |
+| `login_ip_rate_limit_max` | int | `3` | 单 IP 登录尝试上限 |
+| `login_ip_rate_limit_window_secs` | int | `300` | 单 IP 限流窗口（秒） |
+| `login_user_rate_limit_max` | int | `5` | 单账号失败尝试上限 |
+| `login_user_rate_limit_window_secs` | int | `900` | 单账号锁定窗口（秒） |
 | `terms_version` | str | `1.0` | 守则版本 |
 | `terms_text` | str | 内置 v1.0 | 守则正文（Markdown） |
 | `terms.url` | str | 空 | 守则外链 |

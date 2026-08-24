@@ -68,7 +68,7 @@ jobs:
           cp "target/release/${{ matrix.binary }}" "$STAGE/"
           cp -r web "$STAGE/"
           cp -r iLink-Self-Hosted "$STAGE/"
-          cp LICENSE README.md CHANGELOG.md 用户协议.md 部署指南.md "$STAGE/"
+          cp LICENSE README.md CHANGELOG.md API参考.md 用户协议.md 部署指南.md "$STAGE/"
           if [[ "${{ matrix.name }}" == "windows-x64" ]]; then
             cp start.ps1 install-service.ps1 "$STAGE/"
           fi
@@ -173,6 +173,34 @@ jobs:
           sha256sum -c SHA256SUMS.txt
           cd ..
           printf 'release_body=%s\n' "$BODY_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Sign release checksums when a GPG key is configured
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GPG_PRIVATE_KEY}" ]]; then
+            echo "GPG_PRIVATE_KEY is not configured; publishing SHA-256 checksums only."
+            exit 0
+          fi
+          export GNUPGHOME="$(mktemp -d)"
+          chmod 700 "$GNUPGHOME"
+          trap 'rm -rf "$GNUPGHOME"' EXIT
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          fingerprint="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          [[ -n "$fingerprint" ]] || { echo "No secret GPG key was imported" >&2; exit 1; }
+          passphrase_args=()
+          if [[ -n "${GPG_PASSPHRASE}" ]]; then
+            passphrase_args=(--pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
+          fi
+          gpg --batch --yes "${passphrase_args[@]}" --armor --detach-sign \
+            --local-user "$fingerprint" \
+            --output release-assets/SHA256SUMS.txt.asc \
+            release-assets/SHA256SUMS.txt
+          gpg --batch --armor --export "$fingerprint" > release-assets/release-signing-key.asc
+          gpg --batch --verify release-assets/SHA256SUMS.txt.asc release-assets/SHA256SUMS.txt
 
       - name: Create or update release once
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2

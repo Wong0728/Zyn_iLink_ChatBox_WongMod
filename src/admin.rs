@@ -83,8 +83,19 @@ pub enum TopCmd {
 
 #[derive(clap::Subcommand, Debug)]
 pub enum AdminSub {
-    /// 首次初始化：创建 owner 账号
-    Init,
+    /// 首次初始化：创建 owner 账号。无交互环境可用环境变量
+    /// ILINK_OWNER_USER / ILINK_OWNER_PASSWORD（或 ILINK_OWNER_PASSWORD_FILE）。
+    Init {
+        /// owner 用户名（优先于 ILINK_OWNER_USER）
+        #[arg(long)]
+        owner_user: Option<String>,
+        /// owner 密码（优先于 ILINK_OWNER_PASSWORD；注意命令行参数可能被其他本机用户看到）
+        #[arg(long)]
+        owner_password: Option<String>,
+        /// 禁止回退到交互提示；缺少或无效凭据时直接失败
+        #[arg(long)]
+        non_interactive: bool,
+    },
 
     /// 用户管理
     #[command(subcommand)]
@@ -112,6 +123,10 @@ pub enum AdminSub {
     /// IP 封禁管理
     #[command(subcommand)]
     Ip(IpCmd),
+
+    /// 登录限流管理（配置、查看和跨进程清除）
+    #[command(subcommand)]
+    Ratelimit(RatelimitCmd),
 
     /// 内网穿透管理（Serveo SSH 隧道）
     #[command(subcommand)]
@@ -261,6 +276,18 @@ pub enum IpCmd {
 }
 
 #[derive(clap::Subcommand, Debug)]
+pub enum RatelimitCmd {
+    /// 查看最近 24 小时的登录限流计数（IP 和账号维度）
+    List,
+    /// 清除某 IP 的登录限流；如同时给 --user，也会清除该账号锁定
+    Clear {
+        ip: String,
+        #[arg(long)]
+        user: Option<String>,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
 pub enum TunnelCmd {
     /// 启动内网穿透隧道
     Start {
@@ -321,7 +348,17 @@ pub fn run_admin(sub: &AdminSub) -> anyhow::Result<()> {
     let auth = Auth::new(system_db.clone());
 
     match sub {
-        AdminSub::Init => cmd_init(&system_db, &auth),
+        AdminSub::Init {
+            owner_user,
+            owner_password,
+            non_interactive,
+        } => cmd_init(
+            &system_db,
+            &auth,
+            owner_user.as_deref(),
+            owner_password.as_deref(),
+            *non_interactive,
+        ),
         AdminSub::User(c) => cmd_user(&system_db, &auth, c),
         AdminSub::Invite(c) => cmd_invite(&system_db, c),
         AdminSub::Config(c) => cmd_config(&system_db, &auth, c),
@@ -329,6 +366,7 @@ pub fn run_admin(sub: &AdminSub) -> anyhow::Result<()> {
         AdminSub::Terms(c) => cmd_terms(&system_db, c),
         AdminSub::Stats => cmd_stats(&system_db),
         AdminSub::Ip(c) => cmd_ip(&system_db, &auth, c),
+        AdminSub::Ratelimit(c) => cmd_ratelimit(&system_db, c),
         AdminSub::Tunnel(c) => cmd_tunnel(&auth, c),
         AdminSub::Audit(c) => cmd_audit(&system_db, c),
         AdminSub::Webset(c) => cmd_webset(&system_db, &auth, c),
@@ -434,7 +472,96 @@ fn confirm_admin_identity(auth: &Auth, action: &str) -> anyhow::Result<()> {
     }
 }
 
-fn cmd_init(system_db: &SystemDatabase, auth: &Auth) -> anyhow::Result<()> {
+/// 从显式参数或环境变量读取首次 owner 凭据。密码文件读取首行以适配
+/// systemd LoadCredential 和 Docker secret；任何半套输入均拒绝回退交互，
+/// 以避免无 TTY 服务无限等待。
+fn owner_credentials(
+    owner_user: Option<&str>,
+    owner_password: Option<&str>,
+) -> anyhow::Result<Option<(String, String)>> {
+    let username = owner_user.map(str::to_owned).or_else(|| {
+        std::env::var("ILINK_OWNER_USER")
+            .ok()
+            .filter(|v| !v.is_empty())
+    });
+    let mut password = owner_password.map(str::to_owned).or_else(|| {
+        std::env::var("ILINK_OWNER_PASSWORD")
+            .ok()
+            .filter(|v| !v.is_empty())
+    });
+    if password.is_none() {
+        if let Some(path) = std::env::var("ILINK_OWNER_PASSWORD_FILE")
+            .ok()
+            .filter(|path| !path.is_empty())
+        {
+            let content = std::fs::read_to_string(&path).map_err(|e| {
+                anyhow::anyhow!("读取 ILINK_OWNER_PASSWORD_FILE ({path}) 失败: {e}")
+            })?;
+            let content = content.trim_end_matches(['\r', '\n']).to_owned();
+            if !content.is_empty() {
+                password = Some(content);
+            }
+        }
+    }
+
+    match (username, password) {
+        (None, None) => Ok(None),
+        (Some(username), Some(password)) => {
+            if username.len() < 3
+                || username.len() > 32
+                || !username
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            {
+                anyhow::bail!("owner 用户名仅允许 3-32 位字母、数字、下划线或连字符")
+            }
+            Auth::check_password_strength(&password)
+                .map_err(|e| anyhow::anyhow!("owner 密码强度不足: {e}"))?;
+            Ok(Some((username, password)))
+        }
+        _ => anyhow::bail!(
+            "非交互初始化必须同时提供 owner 用户名和密码（ILINK_OWNER_USER + ILINK_OWNER_PASSWORD，或 --owner-user + --owner-password）"
+        ),
+    }
+}
+
+/// 供 server/--no-repl 启动路径调用：只在环境变量完整时创建 owner。
+/// 返回 true 表示已创建，false 表示未提供环境凭据。
+pub fn init_owner_from_environment(system_db: &Arc<SystemDatabase>) -> anyhow::Result<bool> {
+    if !system_db.list_users().is_empty() {
+        return Ok(false);
+    }
+    let Some((username, password)) = owner_credentials(None, None)? else {
+        return Ok(false);
+    };
+    let auth = Auth::new(system_db.clone());
+    let uid = auth
+        .create_user(&username, &password, "owner")
+        .map_err(|e| anyhow::anyhow!("创建 owner 失败: {e}"))?;
+    system_db.audit_log_warn(
+        "bootstrap",
+        "owner.created_from_env",
+        Some(&format!("uid={uid}")),
+        Some(&format!(
+            "{{\"username\":\"{}\",\"source\":\"env\"}}",
+            username
+        )),
+    );
+    tracing::info!(
+        "[BOOTSTRAP] 已通过环境变量创建 owner uid={} username={}",
+        uid,
+        username
+    );
+    Ok(true)
+}
+
+fn cmd_init(
+    system_db: &SystemDatabase,
+    auth: &Auth,
+    owner_user: Option<&str>,
+    owner_password: Option<&str>,
+    non_interactive: bool,
+) -> anyhow::Result<()> {
     // ponytail: ceiling=owner 创建逻辑与 main.rs::first_run_setup 重复约 70 行
     //   （用户名 loop + 密码 loop + create_user + audit）。详见 first_run_setup 的 ceiling 注释。
     // 已有用户 → 拒绝重复初始化
@@ -458,50 +585,63 @@ fn cmd_init(system_db: &SystemDatabase, auth: &Auth) -> anyhow::Result<()> {
     println!("  请创建 owner 账号（系统最高权限）");
     println!("{}", "=".repeat(60));
 
+    let supplied = owner_credentials(owner_user, owner_password)?;
+    if non_interactive && supplied.is_none() {
+        anyhow::bail!("--non-interactive 需要 owner 凭据；请设置 ILINK_OWNER_USER 和 ILINK_OWNER_PASSWORD（或传入 --owner-user / --owner-password）")
+    }
+
     // 1. 用户名
-    let username = loop {
-        print!("用户名 (默认 owner): ");
-        let _ = io::stdout().flush();
-        let mut input = String::new();
-        if io::stdin().lock().read_line(&mut input).is_err() {
-            return Err(anyhow::anyhow!("读取用户名失败"));
+    let username = if let Some((username, _)) = supplied.as_ref() {
+        username.clone()
+    } else {
+        loop {
+            print!("用户名 (默认 owner): ");
+            let _ = io::stdout().flush();
+            let mut input = String::new();
+            if io::stdin().lock().read_line(&mut input).is_err() {
+                return Err(anyhow::anyhow!("读取用户名失败"));
+            }
+            let name = input.trim().to_string();
+            if name.is_empty() {
+                break "owner".to_string();
+            }
+            if !name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            {
+                println!("  ✗ 用户名仅允许字母数字、下划线、连字符");
+                continue;
+            }
+            if name.len() < 3 || name.len() > 32 {
+                println!("  ✗ 用户名长度需 3-32 字符");
+                continue;
+            }
+            break name;
         }
-        let name = input.trim().to_string();
-        if name.is_empty() {
-            break "owner".to_string();
-        }
-        if !name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        {
-            println!("  ✗ 用户名仅允许字母数字、下划线、连字符");
-            continue;
-        }
-        if name.len() < 3 || name.len() > 32 {
-            println!("  ✗ 用户名长度需 3-32 字符");
-            continue;
-        }
-        break name;
     };
 
     // 2. 密码
     println!("密码要求: 8-128 位，必须包含大写字母、小写字母和数字");
-    let password = loop {
-        let pw1 = crate::auth::read_password_with_mask("请输入密码: ");
-        if pw1.is_empty() {
-            println!("  ✗ 密码不能为空");
-            continue;
+    let password = if let Some((_, password)) = supplied {
+        password
+    } else {
+        loop {
+            let pw1 = crate::auth::read_password_with_mask("请输入密码: ");
+            if pw1.is_empty() {
+                println!("  ✗ 密码不能为空");
+                continue;
+            }
+            if let Err(e) = Auth::check_password_strength(&pw1) {
+                println!("  ✗ {}", e);
+                continue;
+            }
+            let pw2 = crate::auth::read_password_with_mask("请再次输入密码确认: ");
+            if pw1 != pw2 {
+                println!("  ✗ 两次密码不一致");
+                continue;
+            }
+            break pw1;
         }
-        if let Err(e) = Auth::check_password_strength(&pw1) {
-            println!("  ✗ {}", e);
-            continue;
-        }
-        let pw2 = crate::auth::read_password_with_mask("请再次输入密码确认: ");
-        if pw1 != pw2 {
-            println!("  ✗ 两次密码不一致");
-            continue;
-        }
-        break pw1;
     };
 
     // 3. 创建 owner（create_user 返回 Result<_, String>，转 anyhow 以便 ? 传播）
@@ -513,7 +653,18 @@ fn cmd_init(system_db: &SystemDatabase, auth: &Auth) -> anyhow::Result<()> {
         "cli",
         "admin.init",
         Some(&format!("uid={}", uid)),
-        Some(&format!("{{\"username\":\"{}\"}}", username)),
+        Some(&format!(
+            "{{\"username\":\"{}\",\"source\":\"{}\"}}",
+            username,
+            if owner_user.is_some()
+                || owner_password.is_some()
+                || std::env::var("ILINK_OWNER_USER").is_ok()
+            {
+                "non_interactive"
+            } else {
+                "interactive"
+            }
+        )),
     );
 
     println!();
@@ -1073,6 +1224,54 @@ fn cmd_ip(system_db: &SystemDatabase, auth: &Auth, cmd: &IpCmd) -> anyhow::Resul
                     "{:<6} {:<18} {:<22} {:<12} {}",
                     b.id, b.ip, expires, b.reason, b.banned_by
                 );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn cmd_ratelimit(system_db: &SystemDatabase, cmd: &RatelimitCmd) -> anyhow::Result<()> {
+    match cmd {
+        RatelimitCmd::List => {
+            let entries = system_db.list_login_rate_limits();
+            if entries.is_empty() {
+                println!("（最近 24 小时暂无登录限流记录）");
+                return Ok(());
+            }
+            println!("登录限流记录（最近 24 小时）");
+            println!("{:<42} {:<8} FIRST_SEEN", "KEY", "COUNT");
+            for (key, count, first_seen) in entries {
+                println!("{:<42} {:<8} {}", key, count, first_seen);
+            }
+        }
+        RatelimitCmd::Clear { ip, user } => {
+            let ip_key = format!("{}|login", ip.trim());
+            let ip_cleared = system_db.clear_login_rate_limit(&ip_key)?;
+            let user_cleared = if let Some(user) = user {
+                system_db.clear_login_rate_limit(&format!("user|{}|login_fail", user.trim()))?
+            } else {
+                0
+            };
+            system_db.audit_log_warn(
+                "cli",
+                "admin.ratelimit.clear",
+                Some(ip.trim()),
+                Some(&format!(
+                    "{{\"ip_entries\":{},\"user\":{},\"user_entries\":{}}}",
+                    ip_cleared,
+                    user.as_deref()
+                        .map(|value| format!("\"{}\"", value))
+                        .unwrap_or_else(|| "null".to_string()),
+                    user_cleared
+                )),
+            );
+            println!(
+                "  ✓ 已清除 IP {} 的登录限流记录 {} 条",
+                ip.trim(),
+                ip_cleared
+            );
+            if let Some(user) = user {
+                println!("  ✓ 已清除账号 {} 的登录限流记录 {} 条", user, user_cleared);
             }
         }
     }

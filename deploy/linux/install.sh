@@ -187,7 +187,7 @@ write_shim() {
 #!/usr/bin/env bash
 # iLinkWM - Zyn iLink ChatBox WongMod 统一命令（由安装器生成）
 set -euo pipefail
-APP_ROOT="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+APP_ROOT="${INSTALL_ROOT}"
 BIN="\$APP_ROOT/ilink-wm1"
 DATA="\$APP_ROOT/data"
 
@@ -217,7 +217,7 @@ WorkingDirectory=\$APP_ROOT
 Environment=ILINK_DATA_DIR=\$DATA
 Environment=ILINK_SERVER_MODE=1
 Environment=RUST_LOG=ilink_wm1=info
-ExecStart=\$BIN
+ExecStart=\$BIN --no-repl
 Restart=on-failure
 RestartSec=5s
 LimitNOFILE=65536
@@ -240,7 +240,7 @@ WorkingDirectory=\$APP_ROOT
 Environment=ILINK_DATA_DIR=\$DATA
 Environment=ILINK_SERVER_MODE=1
 Environment=RUST_LOG=ilink_wm1=info
-ExecStart=\$BIN
+ExecStart=\$BIN --no-repl
 Restart=on-failure
 RestartSec=5s
 LimitNOFILE=65536
@@ -272,10 +272,21 @@ UNIT
         ;;
     uninstall)
         mode="\${2:-}"
-        if [[ "\$mode" == "--keep-data" ]]; then confirm="Y"
+        confirm=""
+        if [[ "\$mode" == "--help" || "\$mode" == "-h" ]]; then
+            echo "用法: iLinkWM uninstall [--keep-data] [--yes]"
+            echo "  默认删除程序与数据；--keep-data 保留 data/；--yes 跳过确认。"
+            exit 0
+        elif [[ "\$mode" == "--keep-data" ]]; then
+            confirm="Y"
+        elif [[ "\$mode" == "--yes" || "\$mode" == "-y" ]]; then
+            confirm="Y"
         else
             printf '卸载 iLinkWM 并删除程序与全部数据（%s）？输入 Y 确认（保留数据请用 --keep-data）: ' "\$DATA"
-            read -r confirm < /dev/tty
+            if ! read -r confirm; then
+                echo "[iLinkWM] 未检测到交互输入；自动化卸载请显式传入 --yes。" >&2
+                exit 2
+            fi
         fi
         [[ "\$confirm" == "Y" || "\$confirm" == "y" ]] || { echo "[iLinkWM] 已取消。"; exit 0; }
         if [[ \$(id -u) -eq 0 ]]; then
@@ -292,7 +303,7 @@ UNIT
             rm -rf "\$APP_ROOT"
             echo "[iLinkWM] 已卸载（程序与数据已全部删除）。"
         fi
-        rm -f "\$SHIM" "\$BIN_DIR/ilink-wm1"
+        rm -f "\$SHIM" "\$BIN_DIR/ilinkwm" "\$BIN_DIR/ilink-wm1"
         echo "[iLinkWM] 完成。"
         ;;
     ilinkwm-help|help)
@@ -303,7 +314,7 @@ UNIT
         echo "  iLinkWM uninstall-service  移除 systemd 服务"
         echo "  iLinkWM service start|stop|restart|status  服务控制"
         echo "  iLinkWM update             更新到最新版本"
-        echo "  iLinkWM uninstall [--keep-data] 卸载（默认删除程序与全部数据；--keep-data 保留数据）"
+        echo "  iLinkWM uninstall [--keep-data|--yes] 卸载（默认删除程序与全部数据；--keep-data 保留数据；--yes 免确认）"
         echo "  iLinkWM admin ...          其余参数原样传给 ilink-wm1"
         echo "  ilink-wm1 ...              二进制直通命令（同在 PATH）：ilink-wm1 --version / admin ..."
         ;;
@@ -316,18 +327,19 @@ UNIT
 esac
 EOF
     chmod +x "$SHIM"
+    ln -sfn "iLinkWM" "$BIN_DIR/ilinkwm"
 
     # ilink-wm1 直通命令：任意终端 ilink-wm1 --version / ilink-wm1 admin ...
-    cat > "$BIN_DIR/ilink-wm1" <<'EXESHIM'
+    cat > "$BIN_DIR/ilink-wm1" <<EXESHIM
 #!/usr/bin/env bash
 # ilink-wm1 直通命令（由安装器生成）：等价直接运行二进制
 set -euo pipefail
-APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN="$APP_ROOT/ilink-wm1"
-[[ -x "$BIN" ]] || { echo "[ilink-wm1] 未找到 $BIN，请重新安装 iLinkWM。" >&2; exit 1; }
-cd "$APP_ROOT"
-export ILINK_DATA_DIR="${ILINK_DATA_DIR:-$APP_ROOT/data}"
-exec "$BIN" "$@"
+APP_ROOT="${INSTALL_ROOT}"
+BIN="\$APP_ROOT/ilink-wm1"
+[[ -x "\$BIN" ]] || { echo "[ilink-wm1] 未找到 \$BIN，请重新安装 iLinkWM。" >&2; exit 1; }
+cd "\$APP_ROOT"
+export ILINK_DATA_DIR="\${ILINK_DATA_DIR:-\$APP_ROOT/data}"
+exec "\$BIN" "\$@"
 EXESHIM
     chmod +x "$BIN_DIR/ilink-wm1"
     success "命令入口：$SHIM、$BIN_DIR/ilink-wm1"
