@@ -96,3 +96,33 @@ jobs:
               raise SystemExit(1)
           print(f"OK: {len(md_files)} markdown files checked")
           PY
+
+  packaging-and-scripts:
+    name: Packaging and script checks (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check JavaScript and deployment scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          find web iLink-Self-Hosted/cloudflare-worker/src -name '*.js' -print0 | xargs -0 -n1 node --check
+          python3 -m py_compile deploy/package.py
+          ruby -e 'require "yaml"; Dir[".github/workflows/*.{yml,yaml}"].each { |f| YAML.load_file(f) }; puts "YAML OK"'
+      - name: Check PowerShell syntax
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -File -Include *.ps1 -Path deploy, iLink-Self-Hosted
+          foreach ($file in $files) {
+            $tokens = $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref] $tokens, [ref] $errors) | Out-Null
+            if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
+          }
+      - name: Verify source package includes self-hosted deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 deploy/package.py --skip-exe
+          archive=$(find 分发 -maxdepth 1 -name '*_src.zip' -print -quit)
+          test -n "$archive"
+          unzip -l "$archive" | grep -q 'iLink-Self-Hosted/'

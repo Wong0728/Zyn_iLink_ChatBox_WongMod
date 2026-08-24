@@ -59,6 +59,7 @@ def main():
     with zipfile.ZipFile(src_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         add_dir(zf, ROOT / "src")
         add_dir(zf, ROOT / "web")
+        add_dir(zf, ROOT / "iLink-Self-Hosted")
         for f in ("Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md",
                   "start.ps1", "install-service.ps1", "代码规范.md", "用户协议.md", "部署指南.md"):
             add_file(zf, ROOT / f)
@@ -74,6 +75,7 @@ def main():
         win_zip = DIST / f"ilink_wm_v{ver}_win_x64.zip"
         with zipfile.ZipFile(win_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             add_dir(zf, ROOT / "web")
+            add_dir(zf, ROOT / "iLink-Self-Hosted")
             add_file(zf, exe, "ilink-wm1.exe")
             for f in ("LICENSE", "README.md", "CHANGELOG.md", "start.ps1",
                       "install-service.ps1", "用户协议.md", "部署指南.md"):

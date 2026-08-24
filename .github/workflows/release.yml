@@ -67,6 +67,7 @@ jobs:
           mkdir -p "$STAGE"
           cp "target/release/${{ matrix.binary }}" "$STAGE/"
           cp -r web "$STAGE/"
+          cp -r iLink-Self-Hosted "$STAGE/"
           cp LICENSE README.md CHANGELOG.md 用户协议.md 部署指南.md "$STAGE/"
           if [[ "${{ matrix.name }}" == "windows-x64" ]]; then
             cp start.ps1 install-service.ps1 "$STAGE/"
@@ -163,6 +164,11 @@ jobs:
             [[ -f "$sidecar" ]] || { echo "缺少 $sidecar" >&2; exit 1; }
             sha256sum -c "$sidecar"
             sha256sum "$archive" >> SHA256SUMS.txt
+          done
+          for archive in "${archives[@]}"; do
+            unzip -l "$archive" | grep -q 'iLink-Self-Hosted/' || {
+              echo "$archive 缺少 iLink-Self-Hosted" >&2; exit 1;
+            }
           done
           sha256sum -c SHA256SUMS.txt
           cd ..

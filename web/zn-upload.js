@@ -228,6 +228,7 @@
             var formData = new FormData();
             formData.append("media_type", mediaType);
             formData.append("filename", file.name);
+            formData.append("to_user_id", _state.currentUser || "");
             formData.append("thumbnail", thumbnailData);
             formData.append("file", file, file.name);
 

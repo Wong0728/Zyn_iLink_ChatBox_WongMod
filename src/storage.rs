@@ -1975,6 +1975,46 @@ impl Database {
         rows.filter_map(|r| r.ok()).collect()
     }
 
+    /// All unfinished outbound rows. An empty contact is never a wildcard.
+    pub fn list_all_pending_outbound(&self) -> Vec<MessageRow> {
+        let conn = self.conn.lock();
+        let mut stmt = match conn.prepare(
+            "SELECT id, trace_id, bot_id, user_id, direction, message_id, client_id,
+                    from_user_id, to_user_id, context_token, item_list_json, text,
+                    media_status, send_state, send_attempts, created_at_ms
+             FROM messages_v2
+             WHERE direction='out' AND send_state IN ('pending','sending','failed')
+             ORDER BY id ASC",
+        ) {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+        let rows = match stmt.query_map([], |row| {
+            Ok(MessageRow {
+                id: row.get(0)?,
+                trace_id: row.get(1)?,
+                bot_id: row.get(2).unwrap_or_default(),
+                user_id: row.get(3)?,
+                direction: row.get(4)?,
+                message_id: row.get(5)?,
+                client_id: row.get(6)?,
+                from_user_id: row.get(7)?,
+                to_user_id: row.get(8)?,
+                context_token: row.get(9)?,
+                item_list_json: row.get(10)?,
+                text: row.get(11)?,
+                media_status: row.get(12)?,
+                send_state: row.get(13)?,
+                send_attempts: row.get(14)?,
+                created_at_ms: row.get(15)?,
+            })
+        }) {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+        rows.filter_map(|r| r.ok()).collect()
+    }
+
     /// 按 id 查单条
     pub fn get_message_v2(&self, id: i64) -> Option<MessageRow> {
         let conn = self.conn.lock();

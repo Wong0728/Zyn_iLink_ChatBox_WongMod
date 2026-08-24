@@ -168,6 +168,44 @@ pub fn is_expired_code(ret: i64) -> bool {
     EXPIRED_CODES.contains(&ret)
 }
 
+/// 判断 iLink 响应是否明确表示会话已失效。
+///
+/// 上游通常提供数值码，但部分版本只返回 `errmsg: session_expired`。
+/// Web 同步发送和后台重试必须使用同一判断，避免前端把会话过期误报为普通发送失败。
+pub fn is_expired_response(result: &serde_json::Value) -> bool {
+    result.get("_expired").and_then(|v| v.as_bool()) == Some(true)
+        || result
+            .get("errcode")
+            .and_then(|v| v.as_i64())
+            .map(is_expired_code)
+            .unwrap_or(false)
+        || result
+            .get("ret")
+            .and_then(|v| v.as_i64())
+            .map(is_expired_code)
+            .unwrap_or(false)
+        || result
+            .get("errmsg")
+            .and_then(|v| v.as_str())
+            .map(|msg| msg.trim().eq_ignore_ascii_case("session_expired"))
+            .unwrap_or(false)
+}
+
+/// 仅重试明确的瞬态发送失败。重复请求沿用同一个 client_id，供 iLink 去重。
+pub fn is_retryable_send_failure(result: &serde_json::Value) -> bool {
+    if is_api_response_success(result) || is_expired_response(result) {
+        return false;
+    }
+    matches!(
+        result.get("ret").and_then(|v| v.as_i64()),
+        Some(-1) | Some(-3)
+    ) || result
+        .get("errmsg")
+        .and_then(|v| v.as_str())
+        .map(|msg| msg.trim().eq_ignore_ascii_case("preparefailed"))
+        .unwrap_or(false)
+}
+
 /// 判断 iLink API 响应是否表示成功。
 /// 标准成功：ret=0 或 errcode=0；备选成功：code=0 / status=0 / success=true。
 /// 当 ret/errcode 均不存在时视为成功（HTTP 200 无错误信号 = 已送达），
@@ -201,8 +239,40 @@ pub fn is_api_response_success(result: &serde_json::Value) -> bool {
             return false;
         }
     }
-    // ret/errcode/status/code 均不存在 → 无失败信号，视为成功
+    // 无数值状态码时，非空 errmsg 仍是上游明确给出的失败信号。
+    // 保留常见的成功文本兼容性；其它字符串（如 preparefailed）不得误判为成功。
+    if let Some(msg) = result.get("errmsg").and_then(|v| v.as_str()) {
+        let msg = msg.trim();
+        if !msg.is_empty()
+            && !msg.eq_ignore_ascii_case("ok")
+            && !msg.eq_ignore_ascii_case("success")
+        {
+            return false;
+        }
+    }
+    // ret/errcode/status/code 均不存在，且没有明确错误信号 → 视为成功。
     true
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::{is_expired_response, is_retryable_send_failure};
+    use serde_json::json;
+
+    #[test]
+    fn classifies_session_expiry_and_transient_send_failures() {
+        assert!(is_expired_response(&json!({"errmsg": "session_expired"})));
+        assert!(is_retryable_send_failure(
+            &json!({"errmsg": "preparefailed"})
+        ));
+        assert!(is_retryable_send_failure(
+            &json!({"ret": -3, "errmsg": "network"})
+        ));
+        assert!(!is_retryable_send_failure(
+            &json!({"errcode": 40014, "errmsg": "session_expired"})
+        ));
+        assert!(!is_retryable_send_failure(&json!({"ret": 0})));
+    }
 }
 
 /// 会话状态机

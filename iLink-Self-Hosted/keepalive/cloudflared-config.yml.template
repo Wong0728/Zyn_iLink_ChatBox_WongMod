@@ -1,0 +1,8 @@
+# 新部署由包根目录的一键部署.ps1 生成此文件；此模板只作参考。
+tunnel: <TUNNEL_ID>
+credentials-file: C:\ProgramData\iLinkWM\hosted\runtime\tunnel-credentials.json
+
+ingress:
+  - hostname: origin.example.com
+    service: http://127.0.0.1:8080
+  - service: http_status:404

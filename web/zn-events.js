@@ -282,7 +282,19 @@
         var rowId = el.dataset.rowId;
         var text = "";
         var bubble = el.querySelector('.bubble');
-        if (bubble) text = bubble.textContent || "";
+        if (bubble) {
+            // `.bubble` 还包含时间和发送状态；重发只能取正文，不能依赖整个子树的 textContent。
+            var textNode = bubble.querySelector('.bubble-text');
+            if (textNode) {
+                text = textNode.textContent || "";
+            } else {
+                // 兼容旧消息结构，同时排除所有非正文节点。
+                var textOnlyBubble = bubble.cloneNode(true);
+                var metaNodes = textOnlyBubble.querySelectorAll('.msg-time-row, .msg-time, .msg-send-status');
+                for (var i = 0; i < metaNodes.length; i++) metaNodes[i].remove();
+                text = textOnlyBubble.textContent || "";
+            }
+        }
 
         if (!rowId || rowId === "0" || rowId === "undefined") {
             // PR5: 同步发送路径无 row_id，直接重新发送文本

@@ -1,0 +1,14 @@
+{
+  "name": "ilink-cloudflare-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker - iLink 密码门 + 限流 + IPv6 报告",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

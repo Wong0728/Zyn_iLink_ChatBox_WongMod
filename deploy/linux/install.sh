@@ -6,7 +6,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh | bash
 #
 # 可选环境变量：
-#   ILINKWM_VERSION=v3.2.4-wm1.1  指定正式版本 tag（默认）；显式 latest 才跟随浮动版本
+#   ILINKWM_VERSION=v3.2.5  指定正式版本 tag（默认）；显式 latest 才跟随浮动版本
 #   ILINKWM_METHOD=auto|binary|source
 #
 # 行为：
@@ -21,7 +21,7 @@ set -euo pipefail
 
 REPO='Wong0728/Zyn_iLink_ChatBox_WongMod'
 BRANCH='main'
-DEFAULT_VERSION='v3.2.4-wm1.1'
+DEFAULT_VERSION='v3.2.5'
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 APP_ID='iLinkWM'
 
@@ -160,6 +160,7 @@ install_from_source() {
     mkdir -p "$stage"
     cp "$tmp/target/release/ilink-wm1" "$stage/"
     cp -r "$tmp/web" "$stage/"
+    [[ -d "$tmp/iLink-Self-Hosted" ]] && cp -r "$tmp/iLink-Self-Hosted" "$stage/"
     for f in LICENSE README.md CHANGELOG.md 用户协议.md 部署指南.md; do
         [[ -f "$tmp/$f" ]] && cp "$tmp/$f" "$stage/"
     done
@@ -356,7 +357,7 @@ info "iLink-WM1 安装器 · 架构 $ARCH · 目标目录 $INSTALL_ROOT"
 METHOD="${ILINKWM_METHOD:-auto}"
 VERSION="${ILINKWM_VERSION:-$DEFAULT_VERSION}"
 if [[ "$VERSION" == "latest" ]]; then
-    warn '已显式选择浮动 latest；正式部署建议固定 ILINKWM_VERSION=v3.2.4-wm1.1。'
+    warn '已显式选择浮动 latest；正式部署建议固定 ILINKWM_VERSION=v3.2.5。'
 fi
 
 ok=0

@@ -1,0 +1,16 @@
+{
+  "install_root": "C:\\ProgramData\\iLinkWM\\hosted",
+  "cf_domain": "chat.example.com",
+  "direct_domain": "direct.example.com",
+  "origin_domain": "origin.example.com",
+  "email": "admin@example.com",
+  "ilink_exe": "C:\\Program Files\\iLinkWM\\ilink-wm1.exe",
+  "caddy_exe": "C:\\Tools\\caddy\\caddy.exe",
+  "cloudflared_exe": "C:\\Tools\\cloudflared\\cloudflared.exe",
+  "tunnel_id": "00000000-0000-0000-0000-000000000000",
+  "tunnel_credentials": "C:\\ProgramData\\cloudflared\\00000000-0000-0000-0000-000000000000.json",
+  "certificate_mode": "dns",
+  "cloudflare_zone_id": "YOUR_ZONE_ID",
+  "direct_aaaa_record_id": "YOUR_AAAA_RECORD_ID",
+  "cloudflare_dns_api_token": "STORE_ONLY_IN_A_LOCAL_COPY_WITH_ADMIN_ONLY_ACL"
+}

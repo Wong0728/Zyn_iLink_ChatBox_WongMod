@@ -290,7 +290,7 @@
     <div class="compare-table-wrap">
       <table class="compare-table">
         <thead>
-          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.5</th></tr>
         </thead>
         <tbody>
           <tr><td>运行形态</td><td>Python 3.7+，启动时自动 pip 安装依赖（qrcode / pycryptodomex，含国内镜像探测）</td><td class="yes">单二进制 + web/ 目录，零运行时依赖</td></tr>
@@ -313,7 +313,7 @@
     <div class="compare-table-wrap">
       <table class="compare-table">
         <thead>
-          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.5</th></tr>
         </thead>
         <tbody>
           <tr><td>微信绑定</td><td>扫码登录、添加联系人二维码（120 秒有效）</td><td>扫码登录 + 会话过期检测与一键重新扫码（reauth）+ 一个账号可绑定多个微信 bot</td></tr>
@@ -336,7 +336,7 @@
     <div class="compare-table-wrap">
       <table class="compare-table">
         <thead>
-          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.5</th></tr>
         </thead>
         <tbody>
           <tr><td>多用户角色体系</td><td>—</td><td class="yes">owner / admin / user 三级，邀请码注册（可过期）、禁用/启用、用户名保留名单、条款同意</td></tr>
@@ -359,7 +359,7 @@
     <div class="compare-table-wrap">
       <table class="compare-table">
         <thead>
-          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.5</th></tr>
         </thead>
         <tbody>
           <tr><td>AI 能力全家桶</td><td>自动回复（gpt-3.5-turbo）、每用户提示词与媒体记忆、识图（gpt-4o）、生图（dall-e-3）、文件识别（PDF/DOCX/XLSX/PPTX）、定时主动消息、工具调用</td><td class="removed">当前版本不内置 AI；计划以 Webhook + 外部机器人配置在后续版本提供（迁移前请确认功能覆盖）</td></tr>
@@ -379,7 +379,7 @@
     <div class="compare-table-wrap">
       <table class="compare-table">
         <thead>
-          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.4-wm1.1</th></tr>
+          <tr><th>维度</th><th>原版 · Python v3.2.4</th><th>WongMod · Rust v3.2.5</th></tr>
         </thead>
         <tbody>
           <tr><td>推送通道</td><td>500ms 轮询 + SSE</td><td class="diff">WebSocket 全事件推送（含发送回执）</td></tr>
@@ -448,7 +448,7 @@
         <button class="cmd-copy" type="button" data-copy>复制</button>
       </div>
       <div class="cmd-body"><span class="p">irm</span> https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/windows/install.ps1 <span class="p">| iex</span></div>
-      <p class="cmd-note">优先下载 Release 预编译包；无可用包时自动回退「克隆源码 + cargo 编译」。安装到 %LOCALAPPDATA%\Programs\iLinkWM，自动加入 PATH。</p>
+       <p class="cmd-note">正式版 v3.2.5：优先下载 Release 预编译包并校验 SHA-256；无可用包时自动回退「克隆源码 + cargo 编译」。安装到 %LOCALAPPDATA%\Programs\iLinkWM，自动加入 PATH。</p>
     </div>
     <div class="cmd-card">
       <div class="cmd-head">
@@ -456,7 +456,7 @@
         <button class="cmd-copy" type="button" data-copy>复制</button>
       </div>
       <div class="cmd-body"><span class="p">curl -fsSL</span> https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh <span class="p">| bash</span></div>
-      <p class="cmd-note">用户态安装到 ~/.local/share/iLinkWM，命令入口 ~/.local/bin/iLinkWM；root 执行 install-service 可注册 systemd 系统服务。服务器完整部署见仓库 deploy/linux/install-server.sh。</p>
+       <p class="cmd-note">正式版 v3.2.5：用户态安装到 ~/.local/share/iLinkWM，命令入口 ~/.local/bin/iLinkWM；root 执行 install-service 可注册 systemd 系统服务。服务器完整部署见仓库 deploy/linux/install-server.sh。</p>
     </div>
     <div class="cmd-card">
       <div class="cmd-head">

@@ -1,6 +1,6 @@
 [package]
 name = "ilink-wm1"
-version = "3.2.4-wm1.1"
+version = "3.2.5"
 edition = "2021"
 authors = ["ZynSync (original) / Mr.Wong (Rust port)"]
 license = "Apache-2.0"

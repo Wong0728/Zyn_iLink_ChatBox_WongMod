@@ -37,6 +37,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 #[allow(dead_code)]
 struct SendTextRequest {
     text: String,
+    to_user_id: String,
     /// 前端生成 req_id 用于 ACK 匹配（缺省时后端自动生成）。
     #[serde(default)]
     req_id: Option<String>,
@@ -4383,13 +4384,13 @@ async fn api_outbound_resend(
     if body.row_id <= 0 {
         return Json(serde_json::json!({"success": false, "error": "row_id 无效"})).into_response();
     }
-    // S9: 横向越权校验——该消息的 to_user_id 必须等于当前用户
+    // The row must belong to this authenticated app user's bot; chat selection
+    // is client-local and is never authorization state.
     let row_id = body.row_id;
-    let current = bot.get_current_user();
     match bot.db.get_message_v2(row_id) {
         Some(m) => {
             let to_user = m.to_user_id.unwrap_or_default();
-            if current.as_deref() != Some(to_user.as_str()) {
+            if !bot.list_users().contains(&to_user) {
                 return Json(serde_json::json!({"success": false, "error": "无权操作此消息"}))
                     .into_response();
             }
@@ -4987,19 +4988,11 @@ async fn api_send(
         return rate_limited_response("send-message");
     }
 
-    let current = bot.get_current_user();
-    let user = match current {
-        Some(u) => u,
-        None => {
-            tracing::warn!("[WEB] api_send 无当前用户（current_user 为空）");
-            // 错误消息改为可操作提示。
-            return Json(serde_json::json!({
-                "success": false,
-                "error": "请先在左侧联系人列表中选择一个对话后再发送消息"
-            }))
+    let user = body.to_user_id.trim().to_string();
+    if validate_user_id(&user).is_err() || !bot.list_users().contains(&user) {
+        return Json(serde_json::json!({"success": false, "error": "联系人不存在或不可用"}))
             .into_response();
-        }
-    };
+    }
     if let Err(e) = state
         .bot
         .reserve_quota(auth.uid, &[(QuotaDim::MsgToday, 1)])
@@ -5110,20 +5103,20 @@ async fn send_media_inner(
     filename: String,
     media_type: String,
     description: String,
-) -> bool {
+) -> Option<serde_json::Value> {
     match tokio::task::spawn_blocking(move || match media_type.as_str() {
         "image" => bot.send_image(&user, &file_bytes, &filename, &description),
         "video" => bot.send_video(&user, &file_bytes, &filename, 0),
         "file" => bot.send_file(&user, &file_bytes, &filename, &description),
         "voice" => bot.send_voice(&user, &file_bytes, &filename, 0),
-        _ => false,
+        _ => None,
     })
     .await
     {
         Ok(v) => v,
         Err(e) => {
             tracing::error!("[WEB] send_media spawn_blocking panic: {}", e);
-            false
+            None
         }
     }
 }
@@ -5183,12 +5176,16 @@ async fn api_send_media(
     let filename = sanitize_filename(&filename);
 
     let size = file_bytes.len() as i64;
-    let current = bot.get_current_user();
-    let user = match current {
-        Some(u) => u,
-        // 与 api_send 文本端点统一，改为可操作提示。
-        None => return Json(serde_json::json!({"success": false, "error": "请先在左侧联系人列表中选择一个对话后再发送消息"})).into_response(),
-    };
+    let user = body
+        .get("to_user_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if validate_user_id(&user).is_err() || !bot.list_users().contains(&user) {
+        return Json(serde_json::json!({"success": false, "error": "联系人不存在或不可用"}))
+            .into_response();
+    }
     let media_reservation = [
         (QuotaDim::UploadBytes, size),
         (QuotaDim::MediaCount, 1),
@@ -5198,7 +5195,7 @@ async fn api_send_media(
         return quota_exceeded_response(e, StatusCode::PAYLOAD_TOO_LARGE);
     }
 
-    let ok = send_media_inner(
+    let message = send_media_inner(
         bot.clone(),
         user,
         file_bytes,
@@ -5208,10 +5205,10 @@ async fn api_send_media(
     )
     .await;
 
-    if !ok {
+    if message.is_none() {
         state.bot.release_quota(auth.uid, &media_reservation);
     }
-    Json(serde_json::json!({"success": ok})).into_response()
+    Json(serde_json::json!({"success": message.is_some(), "message": message})).into_response()
 }
 
 async fn api_upload_media(
@@ -5240,6 +5237,7 @@ async fn api_upload_media(
     };
     let mut media_type = "file".to_string();
     let mut filename = "file".to_string();
+    let mut to_user_id = String::new();
     let mut file_bytes = Vec::new();
 
     while let Ok(Some(mut field)) = multipart.next_field().await {
@@ -5250,6 +5248,9 @@ async fn api_upload_media(
             }
             "filename" => {
                 filename = field.text().await.unwrap_or_default();
+            }
+            "to_user_id" => {
+                to_user_id = field.text().await.unwrap_or_default();
             }
             "file" => {
                 // 流式读取文件字段，边读边检查大小，超过 MAX_UPLOAD_SIZE 立即中止。
@@ -5282,12 +5283,11 @@ async fn api_upload_media(
     let filename = sanitize_filename(&filename);
 
     let size = file_bytes.len() as i64;
-    let current = bot.get_current_user();
-    let user = match current {
-        Some(u) => u,
-        // 与 api_send 文本端点统一，改为可操作提示。
-        None => return Json(serde_json::json!({"success": false, "error": "请先在左侧联系人列表中选择一个对话后再发送消息"})).into_response(),
-    };
+    let user = to_user_id.trim().to_string();
+    if validate_user_id(&user).is_err() || !bot.list_users().contains(&user) {
+        return Json(serde_json::json!({"success": false, "error": "联系人不存在或不可用"}))
+            .into_response();
+    }
     let media_reservation = [
         (QuotaDim::UploadBytes, size),
         (QuotaDim::MediaCount, 1),
@@ -5297,8 +5297,7 @@ async fn api_upload_media(
         return quota_exceeded_response(e, StatusCode::PAYLOAD_TOO_LARGE);
     }
 
-    let bot_for_result = bot.clone();
-    let ok = send_media_inner(
+    let message = send_media_inner(
         bot.clone(),
         user.clone(),
         file_bytes,
@@ -5309,11 +5308,10 @@ async fn api_upload_media(
     .await;
 
     // 如果成功,返回消息对象给前端
-    if ok {
-        let last_msg = bot_for_result.get_last_out_message(&user);
+    if let Some(message) = message {
         Json(serde_json::json!({
             "success": true,
-            "message": last_msg
+            "message": message
         }))
         .into_response()
     } else {
@@ -5399,7 +5397,7 @@ async fn api_switch_user(
         );
     }
 
-    bot.set_current_user(&body.user_id);
+    // Chat selection is browser-local state. Do not mutate the shared bot.
     Json(serde_json::json!({"success": true}))
 }
 
@@ -5416,9 +5414,7 @@ async fn api_delete_user(
             )
         }
     };
-    // S9: 横向越权校验——仅允许操作当前用户
-    let current = bot.get_current_user();
-    if current.as_deref() != Some(body.user_id.as_str()) {
+    if !bot.list_users().contains(&body.user_id) {
         return Json(serde_json::json!({"success": false, "error": "无权操作此用户"}));
     }
     let ok = bot.remove_user(&body.user_id);
@@ -5454,10 +5450,8 @@ async fn api_batch_delete(
                 .collect()
         })
         .unwrap_or_default();
-    // S9: 横向越权校验——所有 user_id 必须等于当前用户（单用户模式下仅一个合法 user_id）
-    let current = bot.get_current_user();
     for uid in &user_ids {
-        if current.as_deref() != Some(uid.as_str()) {
+        if !bot.list_users().contains(uid) {
             return Json(serde_json::json!({"success": false, "error": "无权操作此用户"}));
         }
     }
@@ -5492,9 +5486,7 @@ async fn api_clear_messages(
     };
     let user_id = body.get("user_id").and_then(|v| v.as_str()).unwrap_or("");
     if !user_id.is_empty() {
-        // S9: 横向越权校验——仅允许清除当前用户的消息
-        let current = bot.get_current_user();
-        if current.as_deref() != Some(user_id) {
+        if !bot.list_users().iter().any(|u| u == user_id) {
             return Json(serde_json::json!({"success": false, "error": "无权操作此用户消息"}));
         }
         bot.db.delete_user_messages(user_id);
@@ -5531,16 +5523,10 @@ async fn api_delete_messages(
         return Json(serde_json::json!({"success": false, "error": e}));
     }
 
-    // 所有权校验：只能删除当前选中 peer 的消息（防 IDOR）。
-    //   前端可传 user_id 显式指定；未传时使用 bot.current_user。
-    //   若 user_id 与 bot.current_user 不一致，直接拒绝。
-    let current_peer = bot.get_current_user().unwrap_or_default();
+    // The request must explicitly name a contact; it is checked against this
+    // authenticated app user's bot rather than a shared selected-contact field.
     let requested_user = body.get("user_id").and_then(|v| v.as_str()).unwrap_or("");
-    let scope_user = if requested_user.is_empty() {
-        current_peer.clone()
-    } else {
-        requested_user.to_string()
-    };
+    let scope_user = requested_user.to_string();
     if scope_user.is_empty() {
         return Json(serde_json::json!({
             "success": false,
@@ -5548,7 +5534,7 @@ async fn api_delete_messages(
             "message": "请先选择一个聊天会话再删除消息"
         }));
     }
-    if !current_peer.is_empty() && scope_user != current_peer {
+    if !bot.list_users().contains(&scope_user) {
         return Json(serde_json::json!({
             "success": false,
             "error": "无权操作此用户消息"

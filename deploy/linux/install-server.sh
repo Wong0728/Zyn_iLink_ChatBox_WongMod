@@ -5,14 +5,14 @@
 # 用法：
 #   sudo bash install.sh [源码包路径]
 #
-# 默认源码包路径：/tmp/ilink_wm_v3.2.4-wm1.1_src.zip
+# 默认源码包路径：/tmp/ilink_wm_v3.2.5_src.zip
 #
 # 脚本功能：
 #   1. 检测系统包管理器（apt / dnf / yum）
 #   2. 安装依赖：构建工具、OpenSSL、ffmpeg、OpenSSH client
 #   3. 检查预先安装的 Rust stable 工具链
 #   4. 创建 /opt/ilink 目录与 ilink 系统用户
-#   5. 解压源码到 /opt/ilink/ilink_wm_v3.2.4-wm1.1
+#   5. 解压源码到 /opt/ilink/ilink_wm_v3.2.5
 #   6. cargo build --release（显示进度）
 #   7. 设置目录权限，终端初始化 owner
 #   8. 选择安全模式，生成 /etc/ilink/env 与 /etc/systemd/system/ilink.service
@@ -49,9 +49,9 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # ── 变量 ──────────────────────────────────────────────────
-SRC_ZIP="${1:-/tmp/ilink_wm_v3.2.4-wm1.1_src.zip}"
+SRC_ZIP="${1:-/tmp/ilink_wm_v3.2.5_src.zip}"
 INSTALL_DIR="/opt/ilink"
-APP_DIR="$INSTALL_DIR/ilink_wm_v3.2.4-wm1.1"
+APP_DIR="$INSTALL_DIR/ilink_wm_v3.2.5"
 DATA_DIR="$INSTALL_DIR/data"
 SERVICE_USER="ilink"
 SERVICE_NAME="ilink"
@@ -69,8 +69,8 @@ if [[ ! -f "$SRC_ZIP" ]]; then
         SRC_FROM_GIT=1
     else
         error "源码包不存在: $SRC_ZIP（且未安装 git）"
-        echo "请先上传 ilink_wm_v3.2.4-wm1.1_src.zip 到服务器，或通过参数指定路径："
-        echo "  sudo bash install.sh /path/to/ilink_wm_v3.2.4-wm1.1_src.zip"
+        echo "请先上传 ilink_wm_v3.2.5_src.zip 到服务器，或通过参数指定路径："
+        echo "  sudo bash install.sh /path/to/ilink_wm_v3.2.5_src.zip"
         echo "或安装 git 后由脚本直接克隆：apt install git"
         exit 1
     fi

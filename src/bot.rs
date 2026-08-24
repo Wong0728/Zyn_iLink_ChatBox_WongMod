@@ -577,30 +577,6 @@ impl WeChatiLinkBot {
         self.current_user.read().clone()
     }
 
-    /// 获取指定用户的最后一条发送消息
-    /// 用于upload-media API返回消息对象给前端
-    pub fn get_last_out_message(&self, user_id: &str) -> Option<serde_json::Value> {
-        let messages = self.messages.read();
-        messages
-            .iter()
-            .rev()
-            .find(|m| {
-                m.get("from") == Some(&serde_json::Value::String("me".to_string()))
-                    && m.get("to") == Some(&serde_json::Value::String(user_id.to_string()))
-            })
-            .cloned()
-    }
-
-    pub fn set_current_user(&self, user_id: &str) {
-        let ctx = self.context_tokens.read();
-        if ctx.contains_key(user_id) {
-            *self.current_user.write() = Some(user_id.to_string());
-        }
-        drop(ctx);
-        self.save_config();
-        tracing::info!("已切换到: {}", user_id);
-    }
-
     pub fn remove_user(&self, user_id: &str) -> bool {
         {
             let mut ctx = self.context_tokens.write();
@@ -1767,7 +1743,7 @@ impl WeChatiLinkBot {
     /// 启动时恢复未完成的出站消息
     /// 检查 send_state IN ('pending','sending','failed') 的出站行，重新 spawn retry
     pub fn recover_pending_outbound(self: &Arc<Self>) {
-        let rows = self.db.list_pending_outbound("");
+        let rows = self.db.list_all_pending_outbound();
         if rows.is_empty() {
             return;
         }
@@ -2493,7 +2469,24 @@ impl WeChatiLinkBot {
             },
             "base_info": {"channel_version": "1.0.3"}
         });
-        let result = self.post("sendmessage", &body, 10, Some(&use_token));
+        // 同步 Web 发送过去不重试，导致 iLink 的瞬态 `preparefailed` 直接暴露给用户。
+        // 只重试明确的瞬态响应，并保持同一 client_id 让上游能够去重。
+        let mut result = self.post("sendmessage", &body, 10, Some(&use_token));
+        for retry in 1..=1 {
+            if !is_retryable_send_failure(&result) {
+                break;
+            }
+            let errmsg = result.get("errmsg").and_then(|v| v.as_str()).unwrap_or("");
+            tracing::warn!(
+                "[SEND-WEB] 瞬态发送失败，{}ms 后第 {} 次重试 to={} errmsg={}",
+                400,
+                retry,
+                safe_truncate(to_user_id, 12),
+                safe_truncate(errmsg, 80)
+            );
+            std::thread::sleep(Duration::from_millis(400));
+            result = self.post("sendmessage", &body, 10, Some(&use_token));
+        }
         drop(guard);
 
         let ret = result.get("ret").and_then(|v| v.as_i64());
@@ -2540,11 +2533,15 @@ impl WeChatiLinkBot {
             return Ok(out_msg_with_id);
         }
 
-        if let Some(ec) = errcode {
-            if is_expired_code(ec) {
-                tracing::warn!("[SEND-WEB] 会话已过期 to={} errcode={}", to_user_id, ec);
-                return Err("session_expired".to_string());
-            }
+        if is_expired_response(&result) {
+            tracing::warn!(
+                "[SEND-WEB] 会话已过期 to={} ret={:?} errcode={:?} errmsg={}",
+                safe_truncate(to_user_id, 12),
+                ret,
+                errcode,
+                safe_truncate(&errmsg, 80)
+            );
+            return Err("session_expired".to_string());
         }
         let resp_preview = serde_json::to_string(&result).unwrap_or_default();
         tracing::warn!(
@@ -2554,7 +2551,11 @@ impl WeChatiLinkBot {
             errcode,
             safe_truncate(&resp_preview, 200)
         );
-        Err(format!("发送失败: {}", errmsg))
+        Err(if errmsg.is_empty() {
+            "iLink 未返回错误说明".to_string()
+        } else {
+            errmsg
+        })
     }
 
     // ── 媒体上传/下载 ────────────────────────────────────────
@@ -2720,7 +2721,7 @@ impl WeChatiLinkBot {
         image_bytes: &[u8],
         filename: &str,
         description: &str,
-    ) -> bool {
+    ) -> Option<serde_json::Value> {
         tracing::info!(
             "[SEND] 发送图片给 {} 文件={} 大小={}字节",
             to_user_id,
@@ -2731,7 +2732,7 @@ impl WeChatiLinkBot {
             Some(u) => u,
             None => {
                 tracing::warn!("[SEND] 图片上传失败 给 {}", to_user_id);
-                return false;
+                return None;
             }
         };
 
@@ -2761,7 +2762,7 @@ impl WeChatiLinkBot {
             }
         });
 
-        let ok = self.send_media_message(
+        let result = self.send_media_message(
             to_user_id,
             &image_item,
             description,
@@ -2770,12 +2771,12 @@ impl WeChatiLinkBot {
             0,
             &uploaded,
         );
-        if ok {
+        if result.is_some() {
             tracing::info!("[SEND] 图片发送成功 给 {} 文件={}", to_user_id, filename);
         } else {
             tracing::warn!("[SEND] 图片发送失败 给 {} 文件={}", to_user_id, filename);
         }
-        ok
+        result
     }
 
     pub fn send_file(
@@ -2784,7 +2785,7 @@ impl WeChatiLinkBot {
         file_bytes: &[u8],
         filename: &str,
         description: &str,
-    ) -> bool {
+    ) -> Option<serde_json::Value> {
         tracing::info!(
             "[SEND] 发送文件给 {} 文件={} 大小={}字节",
             to_user_id,
@@ -2797,7 +2798,7 @@ impl WeChatiLinkBot {
             Some(u) => u,
             None => {
                 tracing::warn!("[SEND] 文件上传失败 给 {}", to_user_id);
-                return false;
+                return None;
             }
         };
 
@@ -2825,7 +2826,7 @@ impl WeChatiLinkBot {
             }
         });
 
-        let ok = self.send_media_message(
+        let result = self.send_media_message(
             to_user_id,
             &file_item,
             description,
@@ -2834,12 +2835,12 @@ impl WeChatiLinkBot {
             0,
             &uploaded,
         );
-        if ok {
+        if result.is_some() {
             tracing::info!("[SEND] 文件发送成功 给 {} 文件={}", to_user_id, filename);
         } else {
             tracing::warn!("[SEND] 文件发送失败 给 {} 文件={}", to_user_id, filename);
         }
-        ok
+        result
     }
 
     pub fn send_video(
@@ -2848,7 +2849,7 @@ impl WeChatiLinkBot {
         video_bytes: &[u8],
         filename: &str,
         duration: i64,
-    ) -> bool {
+    ) -> Option<serde_json::Value> {
         tracing::info!(
             "[SEND] 发送视频给 {} 文件={} 大小={}字节",
             to_user_id,
@@ -2861,7 +2862,7 @@ impl WeChatiLinkBot {
             Some(u) => u,
             None => {
                 tracing::warn!("[SEND] 视频上传失败 给 {}", to_user_id);
-                return false;
+                return None;
             }
         };
 
@@ -2891,7 +2892,7 @@ impl WeChatiLinkBot {
             }
         });
 
-        let ok = self.send_media_message(
+        let result = self.send_media_message(
             to_user_id,
             &video_item,
             "",
@@ -2900,12 +2901,12 @@ impl WeChatiLinkBot {
             duration,
             &uploaded,
         );
-        if ok {
+        if result.is_some() {
             tracing::info!("[SEND] 视频发送成功 给 {} 文件={}", to_user_id, filename);
         } else {
             tracing::warn!("[SEND] 视频发送失败 给 {} 文件={}", to_user_id, filename);
         }
-        ok
+        result
     }
 
     /// S42: 发送语音消息。
@@ -2917,7 +2918,7 @@ impl WeChatiLinkBot {
         voice_bytes: &[u8],
         filename: &str,
         duration: i64,
-    ) -> bool {
+    ) -> Option<serde_json::Value> {
         tracing::info!(
             "[SEND] 发送语音给 {} 文件={} 大小={}字节 时长={}ms",
             to_user_id,
@@ -2929,7 +2930,7 @@ impl WeChatiLinkBot {
             Some(u) => u,
             None => {
                 tracing::warn!("[SEND] 语音上传失败 给 {}", to_user_id);
-                return false;
+                return None;
             }
         };
 
@@ -2954,7 +2955,7 @@ impl WeChatiLinkBot {
             }
         });
 
-        let ok = self.send_media_message(
+        let result = self.send_media_message(
             to_user_id,
             &voice_item,
             "",
@@ -2963,12 +2964,12 @@ impl WeChatiLinkBot {
             duration,
             &uploaded,
         );
-        if ok {
+        if result.is_some() {
             tracing::info!("[SEND] 语音发送成功 给 {} 文件={}", to_user_id, filename);
         } else {
             tracing::warn!("[SEND] 语音发送失败 给 {} 文件={}", to_user_id, filename);
         }
-        ok
+        result
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2981,21 +2982,13 @@ impl WeChatiLinkBot {
         media_filename: &str,
         media_duration: i64,
         uploaded: &UploadMediaResult,
-    ) -> bool {
-        let context_token = match self.context_tokens.read().get(to_user_id).cloned() {
-            Some(t) => t,
-            None => return false,
-        };
-        let use_token = match self.get_token_for_user(to_user_id) {
-            Some(t) => t,
-            None => return false,
-        };
+    ) -> Option<serde_json::Value> {
+        let context_token = self.context_tokens.read().get(to_user_id).cloned()?;
+        let use_token = self.get_token_for_user(to_user_id)?;
 
         let lock = self.get_send_lock(to_user_id);
         let guard = lock.try_lock_for(Duration::from_secs(10));
-        if guard.is_none() {
-            return false;
-        }
+        guard.as_ref()?;
 
         // 先发描述文本
         if !description.is_empty() {
@@ -3107,8 +3100,8 @@ impl WeChatiLinkBot {
 
             tracing::info!("[SEND] {}发送成功 给 {}", type_name, to_user_id);
             let out_msg_with_id = self.add_message_to_history(out_msg);
-            self.broker.publish("message", out_msg_with_id);
-            return true;
+            self.broker.publish("message", out_msg_with_id.clone());
+            return Some(out_msg_with_id);
         }
         tracing::warn!(
             "[SEND] 媒体发送失败 给 {} ret={:?} errcode={:?}",
@@ -3116,7 +3109,7 @@ impl WeChatiLinkBot {
             ret,
             errcode
         );
-        false
+        None
     }
 
     // ── 媒体下载 ─────────────────────────────────────────────
@@ -3591,7 +3584,7 @@ impl WeChatiLinkBot {
                     }
                     let rows = bot_clone
                         .db
-                        .list_pending_outbound("")
+                        .list_all_pending_outbound()
                         .into_iter()
                         // S21: 仅重试 pending 状态，不自动重试 failed（避免 update_outbound_resend 重置 send_attempts 致无限循环）
                         .filter(|r| r.send_state == "pending")
@@ -4187,6 +4180,14 @@ impl WeChatiLinkBot {
                                         .collect();
                                     for uid in &users_to_update {
                                         utm.insert(uid.clone(), new_token.clone());
+                                        let context = bot
+                                            .context_tokens
+                                            .read()
+                                            .get(uid)
+                                            .cloned()
+                                            .unwrap_or_default();
+                                        // user_tokens is the restart source of truth.
+                                        bot.db.save_user_token(uid, &context, &new_token);
                                     }
                                     if !users_to_update.is_empty() {
                                         tracing::info!("[REAUTH] 已将 {} 个用户的 bot_token 从旧 token 更新为新 token", users_to_update.len());

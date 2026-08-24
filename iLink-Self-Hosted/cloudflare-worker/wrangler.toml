@@ -1,0 +1,43 @@
+name = "ilink-gate"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+# iLink Cloudflare 前置密码门 Worker —— 3XUI 隐藏路径模式
+# ─────────────────────────────────────────────────────────────
+# 路由分发（catch-all `*` 接管所有路径）：
+#   /                          → 密码 HTML
+#   /verify                    → 校验 FrameCode
+#   /api/myip                  → 当前最新 IPv6
+#   /api/report-myip           → 本机上报 IPv6（X-Report-Token 鉴权）
+#   /<6-8位短码>/<...>          → fetch TUNNEL_ORIGIN/<...>（隐藏路径）
+#   /api/<...>                 → 通过 gate session 后 fetch TUNNEL_ORIGIN/<...>
+#   其它 UI（/chat /auth 等）    → 密码 HTML（"请用根目录登录"）
+#
+# 关键：TUNNEL_ORIGIN 使用独立的 Tunnel 回源域名，例如 origin.example.com。
+# 该回源域名不得绑定此 Worker Route，避免同域名 subrequest 循环。
+#
+# 部署流程：
+#   1. cd <private-worker-directory>
+#   2. npx wrangler login
+#   3. npx wrangler kv:namespace create ILINK_KV  # id 填到下面
+#   4. npx wrangler secret put PASSWORD
+#   5. npx wrangler secret put REPORT_TOKEN
+#   6. npx wrangler deploy
+#   7. Cloudflare Dashboard → Workers Routes：
+#      只保留 catch-all: chat.example.com/* → ilink-gate
+# ─────────────────────────────────────────────────────────────
+
+[[kv_namespaces]]
+binding = "ILINK_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+CF_DOMAIN     = "chat.example.com"
+CHAT_PATH     = "/chat"
+ILINK_PORT    = "443"
+DIRECT_URL    = "https://direct.example.com/chat"
+TUNNEL_ORIGIN = "https://origin.example.com"
+
+# Secrets
+# PASSWORD     - 访问密码
+# REPORT_TOKEN - 本机上报 IPv6 时带的 token
