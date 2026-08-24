@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-iLink-WM1 本地打包脚本（对齐 v3.2.3 轮次的分发目录结构）
+iLink-WM1 本地打包脚本（生成源码包与 Windows x64 便携包）
 
 用法（项目根目录执行）：
     python deploy/package.py            # 打 src.zip + win_x64.zip（需先 cargo build --release）
@@ -54,6 +54,8 @@ def main():
         if not (ROOT / f).read_bytes().startswith(b"\xef\xbb\xbf"):
             sys.exit(f"[package] {f} 缺少 UTF-8 BOM（PS 5.1 -File 中文必需），请勿移除文件头 BOM")
 
+    generated_zips = []
+
     # ── 源码包 ────────────────────────────────────────────
     src_zip = DIST / f"ilink_wm_v{ver}_src.zip"
     with zipfile.ZipFile(src_zip, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -63,9 +65,10 @@ def main():
         for f in ("Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md",
                   "API参考.md", "start.ps1", "install-service.ps1", "代码规范.md", "用户协议.md", "部署指南.md"):
             add_file(zf, ROOT / f)
-        # 服务器部署脚本以包内 install.sh 身份随行（同 3.2.3 轮次）
+        # 服务器部署脚本以包内 install.sh 身份随行。
         add_file(zf, ROOT / "deploy" / "linux" / "install-server.sh", "install.sh")
     print(f"[package] {src_zip.name}（{src_zip.stat().st_size/1024:.0f} KB）")
+    generated_zips.append(src_zip)
 
     # ── Windows 二进制包 ──────────────────────────────────
     if not skip_exe:
@@ -81,11 +84,13 @@ def main():
                       "install-service.ps1", "用户协议.md", "部署指南.md"):
                 add_file(zf, ROOT / f)
         print(f"[package] {win_zip.name}（{win_zip.stat().st_size/1024/1024:.1f} MB）")
+        generated_zips.append(win_zip)
 
     # ── SHA-256 清单（总表 + 每个 zip 的 .sha256 边车，供 CI 与用户校验）──
     manifest = DIST / "SHA256SUMS.txt"
     lines = []
-    for z in sorted(DIST.glob("*.zip")):
+    # 只登记本次运行生成的包；保留分发目录里的历史包，但不能混入当前清单。
+    for z in generated_zips:
         h = hashlib.sha256(z.read_bytes()).hexdigest()
         lines.append(f"{h}  {z.name}")
         sidecar = z.with_suffix(z.suffix + ".sha256")

@@ -56,20 +56,65 @@ case "$(uname -s)-$(uname -m)" in
     *)                            ARCH_TAG='' ;;
 esac
 
-fetch_json() { curl -fsSL --max-time 30 "$1" 2>/dev/null || true; }
+fetch_json() {
+    local url="$1" attempt status body_file detail
+    for attempt in 1 2 3; do
+        body_file="$(mktemp)"
+        if status="$(curl -sS --max-time 30 -o "$body_file" -w '%{http_code}' "$url" 2>&1)"; then
+            if [[ "$status" =~ ^2[0-9]{2}$ ]]; then
+                cat "$body_file"
+                rm -f "$body_file"
+                return 0
+            fi
+            detail="$(head -c 240 "$body_file" | tr '\r\n' ' ')"
+            warn "Release API 返回 HTTP ${status}（第 ${attempt}/3 次）：${detail}" >&2
+        else
+            warn "Release API 请求失败（第 ${attempt}/3 次）：${status}" >&2
+        fi
+        rm -f "$body_file"
+        (( attempt < 3 )) && sleep 2
+    done
+    return 1
+}
+
+latest_tag_from_redirect() {
+    local location
+    if location="$(curl -sS -L --max-time 30 -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" 2>&1)"; then
+        if [[ "$location" =~ /releases/tag/(v[^/?]+)$ ]]; then
+            printf '%s' "${BASH_REMATCH[1]}"
+            return 0
+        fi
+        warn "无法从 GitHub 重定向地址解析 latest tag：${location}" >&2
+    else
+        warn "获取 GitHub latest 重定向地址失败：${location}" >&2
+    fi
+    return 1
+}
+
+verify_binary() {
+    local binary="$1" output
+    if output="$("$binary" --version 2>&1)"; then
+        info "二进制运行验证通过：${output}"
+        return 0
+    fi
+    warn "二进制运行验证失败：${output}" >&2
+    if [[ "$output" =~ GLIBC_[0-9.]+ ]] || [[ "$output" == *'version `GLIBC_'* ]]; then
+        warn "当前系统 glibc 版本可能过低；请使用 Linux musl 版本或从源码编译。" >&2
+    fi
+    return 1
+}
 
 install_from_binary() {
-    local version="${1:-latest}" rel_url asset_url hash_url asset_name
+    local version="${1:-latest}" rel_url asset_url hash_url asset_name fallback_version json
     if [[ "$version" == "latest" ]]; then
         rel_url="https://api.github.com/repos/${REPO}/releases/latest"
     else
         rel_url="https://api.github.com/repos/${REPO}/releases/tags/${version}"
     fi
-    local json
-    json="$(fetch_json "$rel_url")"
-    [[ -z "$json" ]] && { warn "无法获取 Release 信息（$rel_url）"; return 1; }
+    json="$(fetch_json "$rel_url" || true)"
+    [[ -z "$json" ]] && warn "无法获取 Release 信息（$rel_url），准备使用备用下载地址。"
 
-    if command -v python3 >/dev/null 2>&1; then
+    if [[ -n "$json" ]] && command -v python3 >/dev/null 2>&1; then
         mapfile -t asset_meta < <(printf '%s' "$json" | python3 -c "
 import json,sys
 try:
@@ -95,8 +140,21 @@ except Exception: pass
     else
         asset_url=''
     fi
+    # 固定版本的资产名可预测；API 限流、网络异常或 JSON 解析失败时直接尝试 Release URL。
+    if [[ -z "$asset_url" && -n "$ARCH_TAG" ]]; then
+        fallback_version="$version"
+        if [[ "$fallback_version" == "latest" ]]; then
+            fallback_version="$(latest_tag_from_redirect || true)"
+        fi
+        if [[ -n "$fallback_version" && "$fallback_version" != "latest" ]]; then
+            asset_name="ilink_wm_${fallback_version}_${ARCH_TAG}.zip"
+            asset_url="https://github.com/${REPO}/releases/download/${fallback_version}/${asset_name}"
+            hash_url="${asset_url}.sha256"
+            warn "使用备用 Release 下载地址：${asset_url}"
+        fi
+    fi
     [[ -z "$asset_url" ]] && { warn "Release 中没有 ${ARCH_TAG} 预编译包"; return 1; }
-    [[ -z "$hash_url" ]] && { warn "Release 缺少 ${asset_name}.sha256，拒绝安装未校验的二进制包"; return 1; }
+    [[ -z "$hash_url" ]] && hash_url="${asset_url}.sha256"
 
     local tmp
     tmp="$(mktemp -d)"
@@ -129,8 +187,10 @@ except Exception: pass
     local src_root="${tmp}/extract"
     [[ -f "${src_root}/ilink-wm1" ]] || src_root="$(find "${tmp}/extract" -maxdepth 2 -type f -name 'ilink-wm1' -exec dirname {} \; | head -1)"
     [[ -f "${src_root}/ilink-wm1" ]] || { rm -rf "$tmp"; warn "包内未找到 ilink-wm1"; return 1; }
+    verify_binary "${src_root}/ilink-wm1" || { rm -rf "$tmp"; return 1; }
 
     deploy_files "$src_root"
+    verify_binary "${INSTALL_ROOT}/ilink-wm1" || { rm -rf "$tmp"; return 1; }
     rm -rf "$tmp"
     success "已安装（Release 预编译包：${asset_name}）"
     return 0
@@ -155,6 +215,7 @@ install_from_source() {
     info "cargo build --release（首次约 3-10 分钟）..."
     (cd "$tmp" && "$cargo_bin" build --release) || { rm -rf "$tmp"; die "编译失败"; }
     [[ -f "$tmp/target/release/ilink-wm1" ]] || { rm -rf "$tmp"; die "编译产物未找到"; }
+    verify_binary "$tmp/target/release/ilink-wm1" || { rm -rf "$tmp"; die "编译产物无法在当前系统运行"; }
 
     local stage="$tmp/stage"
     mkdir -p "$stage"
@@ -200,7 +261,7 @@ case "\$cmd" in
         exec "\$BIN"
         ;;
     update)
-        echo "[iLinkWM] 正在检查并安装最新版本..."
+        echo "[iLinkWM] 正在检查并安装当前正式版本..."
         exec bash -c "curl -fsSL ${RAW_BASE}/deploy/linux/install.sh | bash"
         ;;
     install-service)
@@ -313,7 +374,7 @@ UNIT
         echo "  iLinkWM install-service    注册 systemd 服务（root=系统级，否则用户级）"
         echo "  iLinkWM uninstall-service  移除 systemd 服务"
         echo "  iLinkWM service start|stop|restart|status  服务控制"
-        echo "  iLinkWM update             更新到最新版本"
+        echo "  iLinkWM update             更新到当前正式版本（可用 ILINKWM_VERSION=latest 跟随浮动版本）"
         echo "  iLinkWM uninstall [--keep-data|--yes] 卸载（默认删除程序与全部数据；--keep-data 保留数据；--yes 免确认）"
         echo "  iLinkWM admin ...          其余参数原样传给 ilink-wm1"
         echo "  ilink-wm1 ...              二进制直通命令（同在 PATH）：ilink-wm1 --version / admin ..."
@@ -346,22 +407,43 @@ EXESHIM
 }
 
 ensure_path() {
+    local path_missing=0
     case ":${PATH}:" in
         *":${BIN_DIR}:"*) : ;;
-        *)
-            warn "目录 $BIN_DIR 不在 PATH 中，尝试写入 ~/.profile / ~/.bashrc..."
-            {
-                echo ''
-                echo '# added by iLinkWM installer'
-                echo "export PATH=\"\$PATH:${BIN_DIR}\""
-            } >> ~/.profile 2>/dev/null || true
-            {
-                echo ''
-                echo '# added by iLinkWM installer'
-                echo "export PATH=\"\$PATH:${BIN_DIR}\""
-            } >> ~/.bashrc 2>/dev/null || true
-            ;;
+        *) path_missing=1 ;;
     esac
+
+    # 子 shell 无法修改调用方环境；这里让安装器后续命令立即可用，并持久化到当前 shell 的配置文件。
+    export PATH="${BIN_DIR}:${PATH}"
+    hash -r 2>/dev/null || true
+
+    add_path_line() {
+        local file="$1" line="$2"
+        if [[ ! -f "$file" ]] || ! grep -Fqx -- "$line" "$file"; then
+            mkdir -p "$(dirname "$file")" 2>/dev/null || true
+            printf '\n%s\n' "$line" >> "$file" 2>/dev/null || true
+        fi
+    }
+
+    if [[ "$path_missing" -eq 1 ]]; then
+            shell_name="${SHELL:-}"
+            shell_name="${shell_name##*/}"
+            case "$shell_name" in
+                fish)
+                    add_path_line "$HOME/.config/fish/config.fish" "fish_add_path --path \"${BIN_DIR}\""
+                    ;;
+                zsh)
+                    add_path_line "$HOME/.zshrc" "export PATH=\"\$PATH:${BIN_DIR}\""
+                    ;;
+                bash)
+                    add_path_line "$HOME/.profile" "export PATH=\"\$PATH:${BIN_DIR}\""
+                    add_path_line "$HOME/.bashrc" "export PATH=\"\$PATH:${BIN_DIR}\""
+                    ;;
+                *)
+                    add_path_line "$HOME/.profile" "export PATH=\"\$PATH:${BIN_DIR}\""
+                    ;;
+            esac
+    fi
 }
 
 # ── 主流程 ─────────────────────────────────────────────
@@ -393,7 +475,7 @@ ensure_path
 
 echo ''
 success '安装完成！下一步：'
-echo '  1. 重新打开终端，或执行： source ~/.profile'
+echo '  1. 安装脚本内部 PATH 已生效；新终端请重新打开，或执行： source ~/.profile'
 echo '  2. 运行  iLinkWM               # 首次运行进入初始化向导'
 echo '  3. 可选  iLinkWM install-service  # 注册 systemd 服务'
 echo ''

@@ -54,7 +54,7 @@ fn print_banner() {
 /// 内置默认使用守则文本（首次运行向导写入 system_settings.terms_text）
 ///
 /// 内容覆盖免责声明、合法使用、隐私说明。修改需重编译；
-/// 用户可通过 `ilink-wm1 admin terms set --file <path>` 动态覆盖。
+/// 用户可通过 `ilink-wm1 admin terms set-text` 从 stdin 动态覆盖。
 const DEFAULT_TERMS_TEXT: &str = r#"# 使用守则
 
 **版本：v1.0**
@@ -115,7 +115,7 @@ const DEFAULT_TERMS_TEXT: &str = r#"# 使用守则
 ///
 /// 返回 (skip_repl_mode, custom_bind_host)
 fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Option<String>) {
-    use std::io::{self, BufRead, Write};
+    use std::io::{self, BufRead, IsTerminal, Write};
     // ponytail: ceiling=owner 创建逻辑与 admin.rs::cmd_init 重复约 70 行
     //   （用户名 loop + 密码 loop + create_user + audit）。不抽出共享 helper：
     //   两端返回类型 / 提示前缀 / audit actor+action / 是否有绑定地址/REPL 模式向导
@@ -137,6 +137,29 @@ fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Op
         println!("[zyn] 如需重新设置，请运行: ilink-wm1 admin config set setup_complete 0");
         println!("[zyn] 或使用 /set 命令在交互模式下修改设置。");
         return (false, None);
+    }
+
+    // 非 TTY 首次启动不能安全地进入交互向导：stdin EOF 时普通 read_line 会返回 Ok(0)，
+    // 密码校验若只判断空字符串就会无限重问。容器/服务请使用 --no-repl 配合 owner 环境变量。
+    let owner_env_ready = std::env::var("ILINK_OWNER_USER")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .is_some()
+        && (std::env::var("ILINK_OWNER_PASSWORD")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .is_some()
+            || std::env::var("ILINK_OWNER_PASSWORD_FILE")
+                .ok()
+                .filter(|p| !p.is_empty())
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .map(|v| !v.trim_end_matches(['\r', '\n']).is_empty())
+                .unwrap_or(false));
+    if !io::stdin().is_terminal() && !has_any_user && !owner_env_ready {
+        eprintln!(
+            "[zyn] 首次启动向导需要交互式 TTY；非交互部署请使用 --no-repl，并提供 ILINK_OWNER_USER 与 ILINK_OWNER_PASSWORD（或密码文件）。"
+        );
+        std::process::exit(2);
     }
 
     // 已有用户 → 跳过 owner 创建步骤（仍可继续向导设置绑定地址/CLI 模式）
@@ -291,19 +314,39 @@ fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Op
                 }
             } else {
                 // 交互式输入
+                let mut attempt = 0;
                 loop {
+                    attempt += 1;
                     let pw1 = crate::auth::read_password_with_mask("  请输入密码: ");
                     if pw1.is_empty() {
-                        println!("  ✗ 密码不能为空");
+                        println!("  ✗ 密码不能为空（第 {}/3 次）", attempt);
+                        if attempt == 3 {
+                            eprintln!(
+                                "[zyn] 密码输入失败次数过多，已退出。请重新运行并提供有效密码。"
+                            );
+                            std::process::exit(2);
+                        }
                         continue;
                     }
                     if let Err(e) = crate::auth::Auth::check_password_strength(&pw1) {
-                        println!("  ✗ {}", e);
+                        println!("  ✗ {}（第 {}/3 次）", e, attempt);
+                        if attempt == 3 {
+                            eprintln!(
+                                "[zyn] 密码输入失败次数过多，已退出。请重新运行并提供有效密码。"
+                            );
+                            std::process::exit(2);
+                        }
                         continue;
                     }
                     let pw2 = crate::auth::read_password_with_mask("  请再次输入密码确认: ");
                     if pw1 != pw2 {
-                        println!("  ✗ 两次密码不一致");
+                        println!("  ✗ 两次密码不一致（第 {}/3 次）", attempt);
+                        if attempt == 3 {
+                            eprintln!(
+                                "[zyn] 密码输入失败次数过多，已退出。请重新运行并提供有效密码。"
+                            );
+                            std::process::exit(2);
+                        }
                         continue;
                     }
                     break pw1;
@@ -499,7 +542,7 @@ fn first_run_setup(system_db: &Arc<crate::storage::SystemDatabase>) -> (bool, Op
             ans == "y" || ans == "yes"
         };
         if !keep {
-            println!("  ✓ 可稍后通过 `ilink-wm1 admin terms set --file <path>` 自定义守则文本");
+            println!("  ✓ 可稍后通过 `cat <path> | ilink-wm1 admin terms set-text` 自定义守则文本");
             println!("    当前仍使用默认守则占位");
         }
     }
@@ -727,7 +770,7 @@ fn settings_menu(
                 println!();
                 println!("  -- 使用守则 v{} --", terms_ver);
                 println!("  预览: {}...", preview.replace('\n', " "));
-                println!("  修改守则请使用: ilink-wm1 admin terms set --file <path>");
+                println!("  修改守则请使用: cat <path> | ilink-wm1 admin terms set-text");
                 println!("  或使用: ilink-wm1 admin terms set-version <version>");
             }
             "5" => {
