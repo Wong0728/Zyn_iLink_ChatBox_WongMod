@@ -578,7 +578,16 @@ impl BotManager {
             return Ok(b);
         }
         // create in spawn_blocking (reqwest::blocking::Client builds a runtime)
-        let bot = match tokio::task::spawn_blocking(move || WeChatiLinkBot::new_for_user(uid)).await
+        let bot = match tokio::task::spawn_blocking(move || {
+            let bot = WeChatiLinkBot::new_for_user(uid)?;
+            // A lazily loaded bot must be restored before it serves requests.
+            if bot.load_config() {
+                bot.start_polling();
+                bot.recover_pending_outbound();
+            }
+            Ok(bot)
+        })
+        .await
         {
             Ok(Ok(bot)) => bot,
             Ok(Err(e)) => {

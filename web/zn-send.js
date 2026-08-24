@@ -4,7 +4,7 @@
     //
     //   后端 api_send 是 PR5 同步发送路径：
     //     - 请求体：{text: string, req_id?: string}
-    //     - to_user_id 由后端从 bot.get_current_user() 取，前端不传
+    //     - to_user_id 由当前前端会话显式传入，不能使用共享服务端状态
     //     - 成功响应：{ok:true, success:true, message:{...}}
     //     - 失败响应：{ok:false, success:false, error:string, session_expired?:bool}
     //     - 成功后后端推 "message" 事件，前端 _handleIncomingMessage 自动替换 pending 元素
@@ -94,7 +94,7 @@
         }, 30000);
 
         // 调用后端 send 端点
-        _api("send", { text: text, req_id: reqId }).then(function(r) {
+        _api("send", { text: text, to_user_id: toUser, req_id: reqId }).then(function(r) {
             clearTimeout(timeoutId);
             if (r && (r.ok || r.success)) {
                 // 同步发送成功：后端会推 "message" 事件，_handleIncomingMessage 自动替换 pending。
@@ -149,7 +149,7 @@
             if (isExpired) {
                 _toast("iLink 会话已过期，消息未送达。可点击红色感叹号重试，或点击顶部重新扫码。", 4000, "error");
             } else {
-                _toast("发送失败: " + errMsg, 3000, "error");
+                _toast((/^发送失败[：:]/.test(errMsg) ? "" : "发送失败: ") + errMsg, 3000, "error");
             }
         }).catch(function(err) {
             clearTimeout(timeoutId);
@@ -172,7 +172,8 @@
                 }
             }
             delete _state.pendingByReqId[reqId];
-            _toast("发送失败: " + (err && err.message || err), 3000, "error");
+            var networkErrMsg = String(err && err.message || err || "网络错误");
+            _toast((/^发送失败[：:]/.test(networkErrMsg) ? "" : "发送失败: ") + networkErrMsg, 3000, "error");
         }).finally(function() {
             // FIX M6 (2026-07-20): 不论成功失败都释放守卫，让用户能发送下一条。
             _sendInProgress = false;

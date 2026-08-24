@@ -3,14 +3,14 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Termux-lightgrey)](#)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](#)
-[![Version](https://img.shields.io/badge/Version-v3.2.4--wm1.1-brightgreen.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-v3.2.5-brightgreen.svg)](CHANGELOG.md)
 [![Hero](https://img.shields.io/badge/GitHub%20Pages-Hero%20页面-8A2BE2)](https://wong0728.github.io/Zyn_iLink_ChatBox_WongMod/)
 
 > 微信官方 iLink 协议 · 开源消息管理平台（Zyn iLink ChatBox 的 Rust 重构版）。
 > 一个二进制启动，零外部依赖，内置 SQLite 零配置。
 > 支持多用户、Web 实时聊天、WebDAV 云存储、消息历史、审计日志与全局通知。
 
-**版本**：v3.2.4-wm1.1 · 基于 Zyn iLink ChatBox v3.1.9 移植，随原版 v3.2.4 对照演进
+**版本**：v3.2.5（正式版）· 基于 Zyn iLink ChatBox v3.1.9 移植，随原版 v3.2.4 对照演进
 **原作者**：ZynSync · **修改者**：Mr.Wong（Rust 重构）
 **本仓库**：<https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod>
 **原仓库**：<https://github.com/zynsync/Zyn-iLink-ChatBox>
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 
 > Windows 端命令入口为 PowerShell 脚本（需 PowerShell 5.1+，安装器会自动把 `.PS1` 加入用户 PATHEXT 并在需要时放行本地脚本执行策略）；本项目已全面弃用 cmd 批处理。随包附带的 `start.ps1`（启动）与 `install-service.ps1`（注册服务）同为 PowerShell 脚本。
 
-> 一键脚本默认固定到 `v3.2.4-wm1.1`，从 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 下载预编译包并校验 SHA-256；无可用包（或对应架构缺失）时从同名 tag 回退到「克隆源码 + cargo 编译」。只有显式设置 `ILINKWM_VERSION=latest` 才跟随浮动版本。
+> 一键脚本默认固定到正式版 `v3.2.5`，从 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 下载预编译包并校验 SHA-256；无可用包（或对应架构缺失）时从同名 tag 回退到「克隆源码 + cargo 编译」。只有显式设置 `ILINKWM_VERSION=latest` 才跟随浮动版本。
 
 ### 参考项目（致谢）
 
@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 
 ### 与原版的关键差异
 
-| 对比项 | 原版 Python v3.2.4 | WongMod Rust v3.2.4-wm1.1 |
+| 对比项 | 原版 Python v3.2.4 | WongMod Rust v3.2.5 |
 |--------|--------------------|---------------------------|
 | 形态 | 单文件 Python，启动时自动 pip 装依赖 | 单二进制零依赖（Rust 全量重构） |
 | 用户 | 全局 Web 密码 / 平级多账号（无角色） | owner-admin-user 三级 + 邀请码 + 配额 |
@@ -90,7 +90,7 @@ git clone https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod.git
 cd Zyn_iLink_ChatBox_WongMod
 ```
 
-> 若部署在内网无 git 的服务器，从 Releases 下载 `ilink_wm_v3.2.4-wm1.1_src.zip` 解压即可，源码即部署包。
+> 若部署在内网无 git 的服务器，从 Releases 下载 `ilink_wm_v3.2.5_src.zip` 解压即可，源码即部署包。
 
 ### 1.3 编译
 

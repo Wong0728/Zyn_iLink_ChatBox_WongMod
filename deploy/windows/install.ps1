@@ -14,7 +14,7 @@
   解析成命令名导致 CommandNotFoundException。
 
   可选环境变量：
-    ILINKWM_VERSION  指定版本 tag（如 v3.2.4-wm1.1），默认 v3.2.4-wm1.1；显式设 latest 才跟随浮动版本
+    ILINKWM_VERSION  指定版本 tag（如 v3.2.5），默认 v3.2.5；显式设 latest 才跟随浮动版本
     ILINKWM_METHOD   auto | binary | source（默认 auto）
 #>
 
@@ -27,7 +27,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 $Repo        = 'Wong0728/Zyn_iLink_ChatBox_WongMod'
 $Branch      = 'main'
-$DefaultVersion = 'v3.2.4-wm1.1'
+$DefaultVersion = 'v3.2.5'
 $AppId       = 'iLinkWM'
 $InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\$AppId"
 $BinDir      = Join-Path $InstallRoot 'bin'
@@ -149,6 +149,8 @@ function Install-FromSource {
     }
     Copy-Item $exe $InstallRoot -Force
     Copy-Item (Join-Path $tmp 'web') $InstallRoot -Recurse -Force
+    $selfHosted = Join-Path $tmp 'iLink-Self-Hosted'
+    if (Test-Path $selfHosted) { Copy-Item $selfHosted $InstallRoot -Recurse -Force }
     foreach ($f in 'LICENSE','README.md','CHANGELOG.md','start.ps1','install-service.ps1','用户协议.md','部署指南.md') {
         $p = Join-Path $tmp $f
         if (Test-Path $p) { Copy-Item $p $InstallRoot -Force }
@@ -368,7 +370,7 @@ Write-Info "iLink-WM1 安装器 · 目标目录 $InstallRoot"
 $method  = if ($env:ILINKWM_METHOD)  { $env:ILINKWM_METHOD }  else { 'auto' }
 $version = if ($env:ILINKWM_VERSION) { $env:ILINKWM_VERSION } else { $DefaultVersion }
 if ($version -eq 'latest') {
-    Write-Warn2 '已显式选择浮动 latest；正式部署建议固定 ILINKWM_VERSION=v3.2.4-wm1.1。'
+    Write-Warn2 '已显式选择浮动 latest；正式部署建议固定 ILINKWM_VERSION=v3.2.5。'
 }
 
 $ok = $false

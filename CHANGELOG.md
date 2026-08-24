@@ -1,7 +1,42 @@
 # 更新日志（CHANGELOG）
 
 本项目版本号跟随上游原版节奏：`v<原版版本>-wm<重构序号>`。
-当前版本：**v3.2.4-wm1.1**（仓库治理与安全加固轮次，无功能新增）。
+当前版本：**v3.2.5**（正式发布）。
+
+---
+
+## v3.2.5（2026-08-24）
+
+正式版本发布。本版包含多用户消息收发可靠性修复、自托管部署组件与完整的多平台 Release 构建。
+
+### 一键本地安装
+
+**Windows（PowerShell 5.1+）：**
+
+```powershell
+irm https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/windows/install.ps1 | iex
+```
+
+**Linux / macOS / Termux：**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh | bash
+```
+
+上述脚本默认固定下载本 Release 的 `v3.2.5` 预编译包，先验证同名 SHA-256 sidecar，再安装到用户本地目录；不会下载 Alpha 版本。缺少本机架构包时才从同一 `v3.2.5` tag 回退源码编译。
+
+### 修复与改进
+
+- 多用户 Web 会话不再依赖服务端共享的当前联系人；文本、媒体、重发、删除与清空操作均显式校验目标联系人。
+- 发送遇到明确的瞬态 iLink 失败时保留相同 `client_id` 重试一次；会话过期与普通失败分别返回给前端。
+- 重启或延迟加载用户机器人时恢复该用户的配置、轮询与未完成出站消息；重新认证后的 token 同步持久化。
+- 媒体发送 API 直接返回刚创建的消息对象，前端不会再通过“最后一条消息”猜测结果。
+- 随源码包与四个平台二进制包一并分发 `iLink-Self-Hosted/` 自托管部署组件，Release 构建前后均校验其存在。
+
+### 发布资产
+
+- Windows x64、Linux x64、Linux arm64、macOS arm64 预编译包，以及源码包。
+- 每个 zip 均附同名 `.sha256`，另提供总表 `SHA256SUMS.txt`。
 
 ---
 

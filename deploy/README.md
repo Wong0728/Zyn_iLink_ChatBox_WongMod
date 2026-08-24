@@ -40,14 +40,14 @@ irm https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/de
 curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh | bash
 ```
 
-安装器默认固定 `v3.2.4-wm1.1`，优先下载带同名 SHA-256 sidecar 的 GitHub Release 预编译包；对应 tag 尚无 Release（或无对应架构）时，自动回退为同名 tag 的
+安装器默认固定正式版 `v3.2.5`，优先下载带同名 SHA-256 sidecar 的 GitHub Release 预编译包；对应 tag 尚无 Release（或无对应架构）时，自动回退为同名 tag 的
 「git clone + cargo build --release」源码编译。**出于安全考虑，安装器不会自动执行
 Rust 官方安装脚本之外的任何第三方脚本，也不会在缺少 Rust 时静默安装工具链**——缺失时
 打印官方指引后退出。
 
 可选环境变量：
 
-- `ILINKWM_VERSION`：指定版本 tag（默认 `v3.2.4-wm1.1`；显式设 `latest` 才跟随浮动版本）
+- `ILINKWM_VERSION`：指定版本 tag（默认 `v3.2.5`；显式设 `latest` 才跟随浮动版本）
 - `ILINKWM_METHOD`：`auto` / `binary` / `source`（默认 `auto`）
 
 ### NSSM 固定版本升级
@@ -63,7 +63,7 @@ Windows 服务脚本当前固定 NSSM 2.24，并在下载 ZIP 与解压 EXE 两�
 
 ```bash
 sudo bash deploy/linux/install-server.sh            # 无源码包时自动 git clone
-sudo bash deploy/linux/install-server.sh /tmp/ilink_wm_v3.2.4-wm1.1_src.zip
+sudo bash deploy/linux/install-server.sh /tmp/ilink_wm_v3.2.5_src.zip
 ```
 
 卸载步骤见脚本头部注释。
