@@ -448,7 +448,7 @@
         <button class="cmd-copy" type="button" data-copy>复制</button>
       </div>
       <div class="cmd-body"><span class="p">irm</span> https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/windows/install.ps1 <span class="p">| iex</span></div>
-       <p class="cmd-note">正式版 v3.2.5：优先下载 Release 预编译包并校验 SHA-256；无可用包时自动回退「克隆源码 + cargo 编译」。安装到 %LOCALAPPDATA%\Programs\iLinkWM，自动加入 PATH。</p>
+       <p class="cmd-note">正式版 v3.2.5：Release API 最多重试 3 次；固定版本 API 仍不可用时按资产名走备用直链，下载同名 SHA-256 后执行 <code style="font-family:var(--font-mono);">--version</code> 验证。无可用包时才回退源码编译。</p>
     </div>
     <div class="cmd-card">
       <div class="cmd-head">
@@ -456,7 +456,18 @@
         <button class="cmd-copy" type="button" data-copy>复制</button>
       </div>
       <div class="cmd-body"><span class="p">curl -fsSL</span> https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh <span class="p">| bash</span></div>
-       <p class="cmd-note">正式版 v3.2.5：用户态安装到 ~/.local/share/iLinkWM，命令入口 ~/.local/bin/iLinkWM；root 执行 install-service 可注册 systemd 系统服务。服务器完整部署见仓库 deploy/linux/install-server.sh。</p>
+       <p class="cmd-note">正式版 v3.2.5：用户态安装到 ~/.local/share/iLinkWM，命令入口 ~/.local/bin/iLinkWM；固定版本 API 失败时使用可预测 Release 直链并校验、运行验证。root 执行 install-service 可注册 systemd 系统服务。</p>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-head">
+        <span class="cmd-title"><span class="os-badge blue">Windows · Linux · macOS</span>&nbsp;&nbsp;最新版便携包</span>
+        <a class="cmd-copy" href="https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases" target="_blank" rel="noreferrer">打开 Releases</a>
+      </div>
+      <div class="cmd-body">Windows ZIP: ilink_wm_v3.2.5_win_x64.zip
+Windows x64: %LOCALAPPDATA%\iLinkWM-portable\v3.2.5
+Linux/macOS: ~/opt/iLinkWM/v3.2.5
+目录要求: ilink-wm1(.exe) 与 web/ 必须同级</div>
+      <p class="cmd-note">同时下载同名 <code style="font-family:var(--font-mono);">.zip.sha256</code> 放在 Windows 的 Downloads 中；安装器只扫描符合 <code style="font-family:var(--font-mono);">ilink_wm_v&lt;版本&gt;_win_x64.zip</code> 的文件，多版本取最新，并用 GitHub 远端 sidecar 对照。哈希异常会 warning 并询问是否继续。</p>
     </div>
     <div class="cmd-card">
       <div class="cmd-head">
@@ -465,7 +476,7 @@
       </div>
       <div class="cmd-body">iLinkWM                      <span class="p"># 启动程序（首次进入初始化向导）</span>
 iLinkWM install-service      <span class="p"># 注册系统服务（Win: NSSM / Linux: systemd）</span>
-iLinkWM update               <span class="p"># 更新到最新版本（保留数据）</span>
+iLinkWM update               <span class="p"># 更新到当前正式版本（保留数据）</span>
 iLinkWM uninstall [--keep-data]  <span class="p"># 一条命令卸载（默认连数据一起删）</span>
 iLinkWM admin ...            <span class="p"># 管理子命令原样传给 ilink-wm1</span>
 ilink-wm1 --version          <span class="p"># 二进制直通命令（同在 PATH）</span></div>

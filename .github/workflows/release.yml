@@ -29,18 +29,22 @@ jobs:
             os: windows-latest
             binary: ilink-wm1.exe
             zip_suffix: win_x64
+            target: x86_64-pc-windows-msvc
           - name: linux-x64
             os: ubuntu-latest
             binary: ilink-wm1
             zip_suffix: linux_x86_64
+            target: x86_64-unknown-linux-musl
           - name: linux-arm64
             os: ubuntu-24.04-arm
             binary: ilink-wm1
             zip_suffix: linux_aarch64
+            target: aarch64-unknown-linux-musl
           - name: macos-arm64
             os: macos-latest
             binary: ilink-wm1
             zip_suffix: macos_aarch64
+            target: aarch64-apple-darwin
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -55,8 +59,32 @@ jobs:
         with:
           shared-key: release-${{ matrix.os }}
 
+      - name: Install musl toolchain
+        if: startsWith(matrix.name, 'linux-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          rustup target add "${{ matrix.target }}"
+
       - name: Build (release)
-        run: cargo build --release --locked
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.name }}" == linux-* ]]; then
+            export CC=musl-gcc
+          fi
+          cargo build --release --locked --target "${{ matrix.target }}"
+
+      - name: Verify Linux binary is static
+        if: startsWith(matrix.name, 'linux-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="target/${{ matrix.target }}/release/${{ matrix.binary }}"
+          file "$binary"
+          file "$binary" | grep -Eqi 'statically linked|static-pie linked'
 
       - name: Package binary zip
         shell: bash
@@ -65,7 +93,7 @@ jobs:
           VER="${GITHUB_REF_NAME#v}"
           STAGE="stage"
           mkdir -p "$STAGE"
-          cp "target/release/${{ matrix.binary }}" "$STAGE/"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "$STAGE/"
           cp -r web "$STAGE/"
           cp -r iLink-Self-Hosted "$STAGE/"
           cp LICENSE README.md CHANGELOG.md API参考.md 用户协议.md 部署指南.md "$STAGE/"
@@ -91,8 +119,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          VER="${GITHUB_REF_NAME#v}"
           python3 deploy/package.py --skip-exe
-          mv 分发/*.zip 分发/*.sha256 .
+          mv "分发/ilink_wm_v${VER}_src.zip" "分发/ilink_wm_v${VER}_src.zip.sha256" .
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

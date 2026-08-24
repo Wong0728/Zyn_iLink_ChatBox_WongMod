@@ -38,50 +38,204 @@ function Write-Info  { Write-Host "[iLinkWM] $args" -ForegroundColor Cyan }
 function Write-Ok    { Write-Host "[iLinkWM] $args" -ForegroundColor Green }
 function Write-Warn2 { Write-Host "[iLinkWM] $args" -ForegroundColor Yellow }
 
+function Find-LocalWindowsPackage {
+    param([string]$Version, [switch]$PreferLatest)
+
+    $downloads = Join-Path $env:USERPROFILE 'Downloads'
+    if (-not (Test-Path -LiteralPath $downloads -PathType Container)) { return $null }
+
+    $candidates = @()
+    foreach ($file in @(Get-ChildItem -LiteralPath $downloads -Filter 'ilink_wm_v*_win_x64.zip' -File -ErrorAction SilentlyContinue)) {
+        $match = [regex]::Match($file.Name, '^ilink_wm_(v\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?)_win_x64\.zip$')
+        if (-not $match.Success) { continue }
+        $tag = $match.Groups[1].Value
+        $core = [regex]::Match($tag, '^v(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?')
+        if (-not $core.Success) { continue }
+        $major = [int]$core.Groups[1].Value
+        $minor = if ($core.Groups[2].Success) { [int]$core.Groups[2].Value } else { 0 }
+        $patch = if ($core.Groups[3].Success) { [int]$core.Groups[3].Value } else { 0 }
+        $build = if ($core.Groups[4].Success) { [int]$core.Groups[4].Value } else { 0 }
+        $candidates += [pscustomobject]@{
+            Path = $file.FullName
+            Name = $file.Name
+            Version = $tag
+            VersionKey = '{0:D8}.{1:D8}.{2:D8}.{3:D8}' -f $major, $minor, $patch, $build
+            LastWriteTime = $file.LastWriteTime
+        }
+    }
+    if (-not $candidates) { return $null }
+
+    if ($Version -and $Version -ne 'latest' -and -not $PreferLatest) {
+        $candidates = @($candidates | Where-Object { $_.Version -eq $Version })
+        if (-not $candidates) { return $null }
+    }
+    $candidates | Sort-Object VersionKey, LastWriteTime -Descending | Select-Object -First 1
+}
+
+function Read-Sha256File {
+    param([string]$Path, [string]$AssetName)
+
+    $line = (Get-Content -LiteralPath $Path -Raw).Trim()
+    $match = [regex]::Match($line, '^\s*([0-9a-fA-F]{64})\s+\*?(.+?)\s*$')
+    if (-not $match.Success -or $match.Groups[2].Value.Trim() -ne $AssetName) {
+        throw "校验文件格式或文件名不匹配：$([IO.Path]::GetFileName($Path))"
+    }
+    $match.Groups[1].Value.ToUpperInvariant()
+}
+
+function Confirm-LocalPackageWarning {
+    param([string[]]$Reasons)
+
+    Write-Warn2 '预下载 ZIP 的本地校验信息与 GitHub Release 不一致：'
+    foreach ($reason in $Reasons) { Write-Warn2 "  - $reason" }
+    $answer = Read-Host '仍要安装这个本地 ZIP 吗？输入 Y 继续，其他输入将重新下载远端文件'
+    if ($answer -notin @('Y', 'y')) {
+        Write-Warn2 '已跳过本地 ZIP，将重新下载 GitHub Release 文件。'
+        return $false
+    }
+    Write-Warn2 '已确认继续安装本地 ZIP。'
+    return $true
+}
+
+function Test-BinaryVersion {
+    param([string]$Path)
+
+    $prevEap = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = (& $Path --version 2>&1 | Out-String).Trim()
+        $exitCode = $LASTEXITCODE
+    } catch {
+        $output = $_.Exception.Message
+        $exitCode = 1
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    if ($exitCode -ne 0) {
+        Write-Warn2 "二进制运行验证失败：$output"
+        return $false
+    }
+    Write-Info "二进制运行验证通过：$output"
+    return $true
+}
+
 function Install-FromBinary {
     param([string]$Version)
 
-    $rel = $null
-    if ($Version -and $Version -ne 'latest') {
-        try { $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Version" -TimeoutSec 30 }
-        catch { Write-Warn2 "未找到版本 $Version：$($_.Exception.Message)" }
-    } else {
-        try { $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -TimeoutSec 30 }
-        catch { Write-Warn2 "尚无 Release（$($_.Exception.Message)）" }
+    # 未显式指定版本时，预下载包按文件名版本号取最新；显式版本仍只接受精确匹配。
+    $preferNewestLocal = -not [bool]$env:ILINKWM_VERSION
+    $localPackage = Find-LocalWindowsPackage -Version $Version -PreferLatest:$preferNewestLocal
+    if ($localPackage) {
+        Write-Info "发现 Downloads 中的预下载包：$($localPackage.Name)"
     }
+
+    $lookupVersion = if ($preferNewestLocal -and $localPackage) { $localPackage.Version } else { $Version }
+    $rel = $null
+    $releaseUri = if ($lookupVersion -and $lookupVersion -ne 'latest') {
+        "https://api.github.com/repos/$Repo/releases/tags/$lookupVersion"
+    } else {
+        "https://api.github.com/repos/$Repo/releases/latest"
+    }
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            $rel = Invoke-RestMethod -Uri $releaseUri -TimeoutSec 30
+            break
+        } catch {
+            Write-Warn2 "Release API 请求失败（第 $attempt/3 次）：$($_.Exception.Message)"
+            if ($attempt -lt 3) { Start-Sleep -Seconds 2 }
+        }
+    }
+
+    $releaseTag = if ($rel) {
+        $rel.tag_name
+    } elseif ($lookupVersion -and $lookupVersion -ne 'latest') {
+        $lookupVersion
+    } elseif ($localPackage) {
+        $localPackage.Version
+    } else {
+        $null
+    }
+    if ($rel -and $releaseTag) {
+        $localPackage = Find-LocalWindowsPackage -Version $releaseTag
+    }
+
     $asset = $null
     $hashAsset = $null
+    $assetName = $null
+    $assetUrl = $null
+    $hashUrl = $null
     if ($rel) {
         $asset = $rel.assets | Where-Object { $_.name -match 'win_x64\.zip$' } | Select-Object -First 1
         if ($asset) {
-            $hashAsset = $rel.assets | Where-Object { $_.name -eq "$($asset.name).sha256" } | Select-Object -First 1
+            $assetName = $asset.name
+            $assetUrl = $asset.browser_download_url
+            $hashAsset = $rel.assets | Where-Object { $_.name -eq "$assetName.sha256" } | Select-Object -First 1
+            $hashUrl = if ($hashAsset) { $hashAsset.browser_download_url } else { "$assetUrl.sha256" }
         }
     }
-    if (-not $asset) { return $false }
-    if (-not $hashAsset) { throw "Release 缺少 $($asset.name).sha256，拒绝安装未校验的二进制包。" }
+
+    # 固定版本的资产名可预测；API 限流、网络异常或 JSON 解析失败时直接走 Release 直链。
+    if (-not $assetUrl -and $releaseTag) {
+        $assetName = "ilink_wm_${releaseTag}_win_x64.zip"
+        $assetUrl = "https://github.com/$Repo/releases/download/$releaseTag/$assetName"
+        $hashUrl = "$assetUrl.sha256"
+        Write-Warn2 "使用备用 Release 下载地址：$assetUrl"
+    }
+    if (-not $assetUrl -or -not $hashUrl) { return $false }
 
     $tmp = Join-Path ([IO.Path]::GetTempPath()) "ilinkwm_install_$(Get-Random)"
     New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-    $zip = Join-Path $tmp $asset.name
-    $hashFile = Join-Path $tmp "$($asset.name).sha256"
-    Write-Info "下载 $($asset.name)（$([math]::Round($asset.size/1MB,1)) MB）..."
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -TimeoutSec 600 -UseBasicParsing
-    Write-Info "下载并校验 $($hashAsset.name)..."
-    Invoke-WebRequest -Uri $hashAsset.browser_download_url -OutFile $hashFile -TimeoutSec 60 -UseBasicParsing
-    $hashLine = (Get-Content -LiteralPath $hashFile -Raw).Trim()
-    # 兼容两种校验文件格式：`hash  文件名`（GNU 文本模式）与 `hash *文件名`（GNU 二进制模式，Windows runner 的 MSYS sha256sum 生成）
-    $hashMatch = [regex]::Match($hashLine, '^\s*([0-9a-fA-F]{64})\s+\*?(.+?)\s*$')
-    if (-not $hashMatch.Success -or $hashMatch.Groups[2].Value.Trim() -ne $asset.name) {
-        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-        throw "校验文件格式或文件名不匹配：$($hashAsset.name)"
+    $usingLocalPackage = $null -ne $localPackage
+    $zip = if ($usingLocalPackage) { $localPackage.Path } else { Join-Path $tmp 'pkg.zip' }
+    $hashFile = Join-Path $tmp "$assetName.sha256"
+    $assetSize = if ($asset) { [math]::Round($asset.size/1MB,1) } else { '?' }
+    if ($usingLocalPackage) {
+        Write-Info "使用预下载包 $($localPackage.Path)（不会重复下载 ZIP）"
+    } else {
+        Write-Info "下载 $assetName（$assetSize MB）..."
+        Invoke-WebRequest -Uri $assetUrl -OutFile $zip -TimeoutSec 600 -UseBasicParsing
     }
-    $expectedHash = $hashMatch.Groups[1].Value.ToUpperInvariant()
-    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToUpperInvariant()
-    if ($actualHash -ne $expectedHash) {
-        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-        throw "$($asset.name) SHA-256 校验失败（实际 $actualHash，期望 $expectedHash），已停止安装。"
+    Write-Info "下载并校验 $assetName.sha256..."
+    Invoke-WebRequest -Uri $hashUrl -OutFile $hashFile -TimeoutSec 60 -UseBasicParsing
+    $expectedHash = Read-Sha256File -Path $hashFile -AssetName $assetName
+
+    if ($usingLocalPackage) {
+        $warnings = @()
+        $localHashPath = "$zip.sha256"
+        $localHash = $null
+        if (Test-Path -LiteralPath $localHashPath) {
+            try {
+                $localHash = Read-Sha256File -Path $localHashPath -AssetName $assetName
+            } catch {
+                $warnings += "本地 $assetName.sha256 格式无效：$($_.Exception.Message)"
+            }
+        } else {
+            $warnings += "Downloads 中缺少同名 $assetName.sha256"
+        }
+        $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToUpperInvariant()
+        if ($localHash -and $localHash -ne $expectedHash) {
+            $warnings += "本地 sidecar 的哈希 $localHash 与 GitHub 远端哈希 $expectedHash 不同"
+        }
+        if ($localHash -and $localHash -ne $actualHash) {
+            $warnings += "本地 ZIP 实际哈希 $actualHash 与本地 sidecar 不同"
+        }
+        if ($actualHash -ne $expectedHash) {
+            $warnings += "本地 ZIP 实际哈希 $actualHash 与 GitHub 远端哈希 $expectedHash 不同"
+        }
+        if ($warnings.Count -gt 0 -and -not (Confirm-LocalPackageWarning -Reasons $warnings)) {
+            $usingLocalPackage = $false
+            $zip = Join-Path $tmp 'pkg.zip'
+            Invoke-WebRequest -Uri $assetUrl -OutFile $zip -TimeoutSec 600 -UseBasicParsing
+            $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToUpperInvariant()
+        }
+    } else {
+        $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToUpperInvariant()
     }
-    Write-Ok "SHA-256 校验通过：$actualHash"
+    if (-not $usingLocalPackage -and $actualHash -ne $expectedHash) {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        throw "$assetName SHA-256 校验失败（实际 $actualHash，期望 $expectedHash），已停止安装。"
+    }
+    Write-Ok "SHA-256 校验通过（GitHub 远端）：$actualHash"
 
     $extract = Join-Path $tmp 'extract'
     Expand-Archive -Path $zip -DestinationPath $extract -Force
@@ -91,7 +245,12 @@ function Install-FromBinary {
         $nested = Get-ChildItem $extract -Directory | Select-Object -First 1
         if ($nested -and (Test-Path (Join-Path $nested.FullName 'ilink-wm1.exe'))) { $srcRoot = $nested.FullName }
     }
-    if (-not (Test-Path (Join-Path $srcRoot 'ilink-wm1.exe'))) { throw "压缩包内未找到 ilink-wm1.exe" }
+    $portableExe = Join-Path $srcRoot 'ilink-wm1.exe'
+    if (-not (Test-Path $portableExe)) { throw "压缩包内未找到 ilink-wm1.exe" }
+    if (-not (Test-BinaryVersion -Path $portableExe)) {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        throw '预编译二进制无法在当前 Windows 系统运行，已停止安装。'
+    }
 
     if (Test-Path $InstallRoot) {
         Write-Info "升级：保留 data/ 与 bin/，覆盖其余文件..."
@@ -102,8 +261,12 @@ function Install-FromBinary {
     }
     Get-ChildItem $srcRoot | Where-Object { $_.Name -ne 'data' } |
         Copy-Item -Destination $InstallRoot -Recurse -Force
+    if (-not (Test-BinaryVersion -Path (Join-Path $InstallRoot 'ilink-wm1.exe'))) {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        throw '已下载的二进制复制后运行验证失败，已停止安装。'
+    }
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-    Write-Ok "已安装 $($rel.tag_name)（Release 预编译包）"
+    Write-Ok "已安装 $releaseTag（Release 预编译包）"
     return $true
 }
 
@@ -140,6 +303,7 @@ function Install-FromSource {
 
     $exe = Join-Path $tmp 'target\release\ilink-wm1.exe'
     if (-not (Test-Path $exe)) { throw "编译产物未找到：$exe" }
+    if (-not (Test-BinaryVersion -Path $exe)) { throw '源码编译产物无法在当前 Windows 系统运行。' }
 
     if (Test-Path $InstallRoot) {
         Get-ChildItem $InstallRoot | Where-Object { $_.Name -ne 'data' -and $_.Name -ne 'bin' } |
@@ -211,7 +375,7 @@ function Show-Help {
     Write-Host '  iLinkWM install-service     注册 Windows 服务（NSSM，需管理员）'
     Write-Host '  iLinkWM uninstall-service   移除 Windows 服务（需管理员）'
     Write-Host '  iLinkWM service start|stop  启停服务（需管理员）；其余参数查询状态'
-    Write-Host '  iLinkWM update              更新到最新版本'
+        Write-Host '  iLinkWM update              更新到当前正式版本（可用 ILINKWM_VERSION=latest 跟随浮动版本）'
     Write-Host '  iLinkWM uninstall [--keep-data] 卸载；默认删除程序与全部数据，--keep-data 保留数据'
     Write-Host '  iLinkWM admin ...           其余参数原样传给 ilink-wm1'
     Write-Host '  ilink-wm1 ...               二进制直通命令（同在 PATH）：ilink-wm1 --version / admin ...'
@@ -227,7 +391,7 @@ switch -Regex ($cmd) {
     '^(?i)ilinkwm-help$' { Show-Help }
 
     '^(?i)update$' {
-        Write-Host '[iLinkWM] 正在检查并安装最新版本...'
+        Write-Host '[iLinkWM] 正在检查并安装当前正式版本...'
         iex (irm "$rawBase/deploy/windows/install.ps1")
     }
 

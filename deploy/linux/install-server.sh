@@ -9,7 +9,7 @@
 #
 # 脚本功能：
 #   1. 检测系统包管理器（apt / dnf / yum）
-#   2. 安装依赖：构建工具、OpenSSL、ffmpeg、OpenSSH client
+#   2. 安装依赖：构建工具、ffmpeg、OpenSSH client、unzip、curl
 #   3. 检查预先安装的 Rust stable 工具链
 #   4. 创建 /opt/ilink 目录与 ilink 系统用户
 #   5. 解压源码到 /opt/ilink/ilink_wm_v3.2.5
@@ -98,11 +98,11 @@ info "Step 2/11: 安装系统依赖..."
 case "$PKG_MANAGER" in
     apt)
         apt-get update -y
-        apt-get install -y build-essential pkg-config libssl-dev unzip curl ca-certificates ffmpeg openssh-client
+        apt-get install -y build-essential pkg-config unzip curl ca-certificates ffmpeg openssh-client
         ;;
     dnf|yum)
         $PKG_MANAGER groupinstall -y "Development Tools"
-        $PKG_MANAGER install -y openssl-devel pkg-config unzip curl ca-certificates ffmpeg openssh-clients
+        $PKG_MANAGER install -y pkg-config unzip curl ca-certificates ffmpeg openssh-clients
         ;;
 esac
 success "系统依赖已安装"
@@ -162,7 +162,7 @@ if ! cargo build --release; then
     error "编译失败，请检查错误输出"
     echo "常见原因："
     echo "  1. 内存不足（OOM）→ 添加 swap：sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile"
-    echo "  2. openssl 缺失 → apt install libssl-dev pkg-config"
+    echo "  2. 构建依赖缺失 → apt install build-essential pkg-config"
     exit 1
 fi
 

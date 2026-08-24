@@ -22,6 +22,7 @@ pub fn is_supported_system_setting(key: &str) -> bool {
             | "terms_text"
             | "terms.url"
             | "docs.url"
+            | "setup_complete"
             | "default_quota_upload_bytes"
             | "default_quota_download_bytes"
             | "default_quota_media_bytes"
@@ -67,6 +68,9 @@ pub fn validate_system_setting(key: &str, value: &str) -> anyhow::Result<()> {
         }
         "terms_version" if value.trim().is_empty() || value.len() > 64 => {
             anyhow::bail!("守则版本不能为空且不能超过 64 字节")
+        }
+        "setup_complete" if !matches!(value, "0" | "1") => {
+            anyhow::bail!("setup_complete 只能是 0 或 1")
         }
         "terms_text" if value.len() > 65_536 => anyhow::bail!("守则正文不能超过 64KB"),
         "terms.url" | "docs.url" if !value.trim().is_empty() => {

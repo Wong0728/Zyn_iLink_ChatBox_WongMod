@@ -22,7 +22,7 @@ clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net", "signal"] }
 
 # HTTP client
-reqwest = { version = "0.12", features = ["json", "gzip", "blocking"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "gzip", "blocking", "rustls-tls-native-roots"] }
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }

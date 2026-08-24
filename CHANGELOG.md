@@ -23,7 +23,7 @@ irm https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/de
 curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/main/deploy/linux/install.sh | bash
 ```
 
-上述脚本默认固定下载本 Release 的 `v3.2.5` 预编译包，先验证同名 SHA-256 sidecar，再安装到用户本地目录；不会下载 Alpha 版本。缺少本机架构包时才从同一 `v3.2.5` tag 回退源码编译。
+上述脚本默认固定下载本 Release 的 `v3.2.5` 预编译包，先验证同名 SHA-256 sidecar，再执行 `--version` 运行验证后安装到用户本地目录；GitHub API 失败时会重试并按固定资产名直连 Release。Linux x86_64/aarch64 包使用 musl 静态目标，不受安装机 glibc 版本限制；不会下载 Alpha 版本，缺少本机架构包时才从同一 `v3.2.5` tag 回退源码编译。
 
 ### 修复与改进
 
@@ -34,6 +34,12 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 - 首次初始化支持环境变量与 `--non-interactive`，服务模式明确使用 `--no-repl`，更适合容器和 systemd。
 - 登录 IP / 账号限流改为可配置、可查看、可由管理员清除，并补齐 `/healthz` 的状态信息。
 - Linux 安装器补齐 `ilinkwm` 兼容入口、非交互卸载参数与固定安装路径；API 参考随源码包发布。
+- Linux 安装器增加 Release API 重试、固定资产名备用下载、二进制运行验证和 zsh/fish PATH 持久化；首次运行向导在非 TTY 且缺少非交互凭据时直接退出，避免 EOF 无限重问。
+- Windows 安装器与 Linux 安装器对齐：Release API 重试、固定版本备用直链、SHA-256 与 `--version` 安装前后验证；更新命令明确指向当前正式版本。
+- README、部署指南和 Hero 页补充四平台便携包的解压目录、`web/` 同级约定与 `ILINK_DATA_DIR`；本地打包清单不再混入历史 ZIP。
+- Linux x86_64/aarch64 Release 改为 musl 静态编译，并将 HTTP 客户端切换为 rustls，避免预编译包依赖过新的 glibc/OpenSSL。
+- `setup_complete` 加入系统设置白名单，README 中的 `admin config set setup_complete 0` 现在可用；补充 `/static/*` 与页面路由映射说明。
+- 依赖许可证白名单补充 rustls 链路所需的 ISC License，保持 `cargo deny check` 可复现通过。
 - 随源码包与四个平台二进制包一并分发 `iLink-Self-Hosted/` 自托管部署组件，Release 构建前后均校验其存在。
 
 ### 发布资产

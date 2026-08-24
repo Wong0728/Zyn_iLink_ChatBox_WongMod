@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 
 > Windows 端命令入口为 PowerShell 脚本（需 PowerShell 5.1+，安装器会自动把 `.PS1` 加入用户 PATHEXT 并在需要时放行本地脚本执行策略）；本项目已全面弃用 cmd 批处理。随包附带的 `start.ps1`（启动）与 `install-service.ps1`（注册服务）同为 PowerShell 脚本。
 
-> 一键脚本默认固定到正式版 `v3.2.5`，从 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 下载预编译包并校验 SHA-256；无可用包（或对应架构缺失）时从同名 tag 回退到「克隆源码 + cargo 编译」。只有显式设置 `ILINKWM_VERSION=latest` 才跟随浮动版本。
+> 一键脚本默认固定到正式版 `v3.2.5`，从 [Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 下载预编译包并校验 SHA-256；GitHub API 临时失败时会重试并按固定资产名直连 Release，下载后还会执行 `ilink-wm1 --version` 运行验证。Linux x86_64/aarch64 Release 使用 musl 静态目标，不依赖安装机的 glibc 版本；无可用包时才从同名 tag 回退到「克隆源码 + cargo 编译」。只有显式设置 `ILINKWM_VERSION=latest` 才跟随浮动版本。安装脚本可以立即使用自身的 PATH，但通过 `curl | bash` 无法修改父 shell；新终端请重新打开或执行 `source ~/.profile`。
 
 ### 参考项目（致谢）
 
@@ -83,6 +83,28 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 | 浏览器 | Chrome 90+ / Edge 90+ / Safari 14+ / Firefox 88+，需启用 Cookie 与 JavaScript |
 | 网络 | 服务端需能访问微信 iLink 协议域名；客户端浏览器需能访问服务端 |
 
+### 1.1.1 下载最新版便携包（无需安装器）
+
+从 [GitHub Releases](https://github.com/Wong0728/Zyn_iLink_ChatBox_WongMod/releases) 下载对应平台的完整 ZIP，
+解压到一个专用目录即可。推荐目录如下；路径不是强制的，关键是不要只拿二进制，且始终保持 `web/` 与二进制同级：
+
+| 平台 | 推荐解压目录 | 应下载的资产 | 启动方式 |
+|------|--------------|--------------|----------|
+| Windows x64 | `%LOCALAPPDATA%\iLinkWM-portable\v3.2.5` | `ilink_wm_v3.2.5_win_x64.zip` | PowerShell 执行 `powershell -ExecutionPolicy Bypass -File .\start.ps1` |
+| Linux x86_64 | `~/opt/iLinkWM/v3.2.5` | `ilink_wm_v3.2.5_linux_x86_64.zip` | `./ilink-wm1` |
+| Linux aarch64 | `~/opt/iLinkWM/v3.2.5` | `ilink_wm_v3.2.5_linux_aarch64.zip` | `./ilink-wm1` |
+| macOS arm64 | `~/opt/iLinkWM/v3.2.5` | `ilink_wm_v3.2.5_macos_aarch64.zip` | `./ilink-wm1` |
+
+Windows 的 `start.ps1` 会把数据放到便携目录的 `data\`；Linux/macOS 直接运行二进制时，默认数据就在二进制所在目录。
+若希望数据独立存放，启动前设置绝对路径：`ILINK_DATA_DIR=/srv/ilink-data ./ilink-wm1`，或在 PowerShell 中设置
+`$env:ILINK_DATA_DIR = 'D:\iLinkWM-data'`。完整解压后，目录至少应包含 `ilink-wm1(.exe)` 和 `web/`。
+
+手动下载时请同时下载同名校验文件 `ilink_wm_v3.2.5_win_x64.zip.sha256`；它与 ZIP 在 GitHub Release 中并列，**不放在 ZIP 内**。
+SHA-256 校验的是整个 ZIP，把校验文件塞进 ZIP 会改变 ZIP 本身的哈希。Windows 一键安装器会自动下载并校验这两个 Release 资产。
+如果提前下载 ZIP，可以放在当前用户的 `C:\Users\<用户名>\Downloads`。Windows 一键安装器会只扫描符合
+`ilink_wm_v<版本>_win_x64.zip` 格式的文件；未显式指定版本时，多个候选按版本号选择最新的一个，再查询 GitHub 对应 tag。
+它会同时读取同目录的 `.zip.sha256`，再从 GitHub 下载远端 sidecar 对照；不一致时显示 warning 并询问是否继续安装。
+
 ### 1.2 获取源码
 
 ```bash
@@ -116,13 +138,7 @@ cargo build --release
 > cargo build --release
 > ```
 >
-> ```cmd
-> :: cmd
-> set CARGO_TARGET_DIR=C:\ilink-wm1-target
-> cargo build --release
-> ```
->
-> 或者直接用 `run_test.py`——它已经把 `CARGO_TARGET_DIR` 指向项目内的 `target/`（仍含中文但能跑通）。
+> 项目不再维护 cmd.exe 启动入口；需要设置构建目录时请使用上面的 PowerShell 写法，或直接使用 `run_test.py`。
 
 ### 1.4 首次启动向导
 
@@ -167,6 +183,8 @@ cargo build --release
 ```bash
 ilink-wm1 admin config set setup_complete 0
 ```
+
+`setup_complete` 是受支持的系统设置，只允许写入 `0` 或 `1`。非交互部署不要把 stdin 管道给首次启动向导；请使用 `--no-repl`，并提供 `ILINK_OWNER_USER`、`ILINK_OWNER_PASSWORD`（或 `ILINK_OWNER_PASSWORD_FILE`）。
 
 ### 1.5 数据目录
 
@@ -1018,6 +1036,8 @@ sudo systemctl start ilink
 | `/api/admin/*` | GET/POST | 登录 + admin + IP 守卫 | 管理员 API |
 | `/api/ws` | GET | 公开（升级后校验） | WebSocket |
 | `/static/*` | GET | 公开 | 前端静态资源（强制 no-cache） |
+
+运行时前端文件位于安装目录的 `web/`，由服务统一映射到 `/static/*`；页面使用无 `.html` 后缀的路由（如 `/auth`、`/chat`、`/admin`）。因此直接访问 `/style.css` 或 `/auth.html` 不属于公开路由，应使用页面内加载的 `/static/*` 资源或页面路由。
 
 `/healthz` 成功时返回 `{"status":"ok","version":"…","uptime_secs":0,"db_status":"ok","active_bots":0}`；数据库不可查询时返回 `503` 与 `status:"degraded"`。
 
