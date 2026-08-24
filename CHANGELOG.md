@@ -31,6 +31,9 @@ curl -fsSL https://raw.githubusercontent.com/Wong0728/Zyn_iLink_ChatBox_WongMod/
 - 发送遇到明确的瞬态 iLink 失败时保留相同 `client_id` 重试一次；会话过期与普通失败分别返回给前端。
 - 重启或延迟加载用户机器人时恢复该用户的配置、轮询与未完成出站消息；重新认证后的 token 同步持久化。
 - 媒体发送 API 直接返回刚创建的消息对象，前端不会再通过“最后一条消息”猜测结果。
+- 首次初始化支持环境变量与 `--non-interactive`，服务模式明确使用 `--no-repl`，更适合容器和 systemd。
+- 登录 IP / 账号限流改为可配置、可查看、可由管理员清除，并补齐 `/healthz` 的状态信息。
+- Linux 安装器补齐 `ilinkwm` 兼容入口、非交互卸载参数与固定安装路径；API 参考随源码包发布。
 - 随源码包与四个平台二进制包一并分发 `iLink-Self-Hosted/` 自托管部署组件，Release 构建前后均校验其存在。
 
 ### 发布资产

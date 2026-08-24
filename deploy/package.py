@@ -61,7 +61,7 @@ def main():
         add_dir(zf, ROOT / "web")
         add_dir(zf, ROOT / "iLink-Self-Hosted")
         for f in ("Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md",
-                  "start.ps1", "install-service.ps1", "代码规范.md", "用户协议.md", "部署指南.md"):
+                  "API参考.md", "start.ps1", "install-service.ps1", "代码规范.md", "用户协议.md", "部署指南.md"):
             add_file(zf, ROOT / f)
         # 服务器部署脚本以包内 install.sh 身份随行（同 3.2.3 轮次）
         add_file(zf, ROOT / "deploy" / "linux" / "install-server.sh", "install.sh")
@@ -77,7 +77,7 @@ def main():
             add_dir(zf, ROOT / "web")
             add_dir(zf, ROOT / "iLink-Self-Hosted")
             add_file(zf, exe, "ilink-wm1.exe")
-            for f in ("LICENSE", "README.md", "CHANGELOG.md", "start.ps1",
+            for f in ("LICENSE", "README.md", "CHANGELOG.md", "API参考.md", "start.ps1",
                       "install-service.ps1", "用户协议.md", "部署指南.md"):
                 add_file(zf, ROOT / f)
         print(f"[package] {win_zip.name}（{win_zip.stat().st_size/1024/1024:.1f} MB）")

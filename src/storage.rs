@@ -31,6 +31,10 @@ pub fn is_supported_system_setting(key: &str) -> bool {
             | "default_allow_webdav"
             | "default_allow_custom_webdav"
             | "admin.web_access"
+            | "login_ip_rate_limit_max"
+            | "login_ip_rate_limit_window_secs"
+            | "login_user_rate_limit_max"
+            | "login_user_rate_limit_window_secs"
     )
 }
 
@@ -79,6 +83,18 @@ pub fn validate_system_setting(key: &str, value: &str) -> anyhow::Result<()> {
             let quota = value.parse::<i64>()?;
             if quota < -1 {
                 anyhow::bail!("配额只能为 -1（无限制）、0（未设置）或正整数");
+            }
+        }
+        "login_ip_rate_limit_max" | "login_user_rate_limit_max" => {
+            let limit = value.parse::<u32>()?;
+            if !(1..=100).contains(&limit) {
+                anyhow::bail!("登录限流次数必须为 1-100")
+            }
+        }
+        "login_ip_rate_limit_window_secs" | "login_user_rate_limit_window_secs" => {
+            let window = value.parse::<u32>()?;
+            if !(30..=86_400).contains(&window) {
+                anyhow::bail!("登录限流窗口必须为 30-86400 秒")
             }
         }
         "admin.web_access" if !matches!(value, "off" | "intranet" | "open") => {
@@ -1671,7 +1687,6 @@ impl Database {
                 };
             }
         }
-
         // 插入（带 message_id 时由 UNIQUE 兜底防并发竞争）
         let res = conn.execute(
             "INSERT OR IGNORE INTO messages_v2 (
@@ -2164,6 +2179,83 @@ impl SystemDatabase {
         Ok(sys)
     }
 
+    /// 用于公开 healthz 的轻量数据库连通性检查。
+    pub fn health_check(&self) -> bool {
+        let conn = self.db.conn_lock();
+        conn.query_row("SELECT 1", [], |_| Ok(())).is_ok()
+    }
+
+    /// 登录限流必须跨服务/CLI 进程共享，故不使用进程内 HashMap。
+    /// 返回 true 表示当前请求已被限流；false 表示已记录本次尝试。
+    pub fn check_login_rate_limit(&self, key: &str, max: usize, window_secs: u64) -> bool {
+        let now = chrono::Utc::now().timestamp();
+        let cutoff = now.saturating_sub(window_secs as i64);
+        let conn = self.db.conn_lock();
+        let _ = conn.execute(
+            "DELETE FROM rate_limit_attempts WHERE key = ?1 AND attempted_at <= ?2",
+            params![key, cutoff],
+        );
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM rate_limit_attempts WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .unwrap_or(i64::MAX);
+        if count >= max as i64 {
+            return true;
+        }
+        conn.execute(
+            "INSERT INTO rate_limit_attempts (key, attempted_at) VALUES (?1, ?2)",
+            params![key, now],
+        )
+        .is_err()
+    }
+
+    /// 仅检查当前登录限流状态，不计入一次尝试。
+    pub fn is_login_rate_limited(&self, key: &str, max: usize, window_secs: u64) -> bool {
+        let now = chrono::Utc::now().timestamp();
+        let cutoff = now.saturating_sub(window_secs as i64);
+        let conn = self.db.conn_lock();
+        let _ = conn.execute(
+            "DELETE FROM rate_limit_attempts WHERE key = ?1 AND attempted_at <= ?2",
+            params![key, cutoff],
+        );
+        conn.query_row(
+            "SELECT COUNT(*) FROM rate_limit_attempts WHERE key = ?1",
+            params![key],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(i64::MAX)
+            >= max as i64
+    }
+
+    pub fn clear_login_rate_limit(&self, key: &str) -> anyhow::Result<usize> {
+        let conn = self.db.conn_lock();
+        Ok(conn.execute(
+            "DELETE FROM rate_limit_attempts WHERE key = ?1",
+            params![key],
+        )?)
+    }
+
+    pub fn list_login_rate_limits(&self) -> Vec<(String, i64, i64)> {
+        let cutoff = chrono::Utc::now().timestamp().saturating_sub(86_400);
+        let conn = self.db.conn_lock();
+        let _ = conn.execute(
+            "DELETE FROM rate_limit_attempts WHERE attempted_at <= ?1",
+            params![cutoff],
+        );
+        let mut stmt = match conn.prepare(
+            "SELECT key, COUNT(*), MIN(attempted_at) FROM rate_limit_attempts GROUP BY key ORDER BY MIN(attempted_at) DESC",
+        ) {
+            Ok(stmt) => stmt,
+            Err(_) => return Vec::new(),
+        };
+        stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
+    }
+
     /// 在 system.db 执行建表（v2.1 schema）
     fn init_schema(&self) -> anyhow::Result<()> {
         let conn = self.db.conn_lock();
@@ -2250,6 +2342,12 @@ impl SystemDatabase {
                 value TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS rate_limit_attempts (
+                key TEXT NOT NULL,
+                attempted_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_rate_limit_attempts_key_time
+                ON rate_limit_attempts(key, attempted_at);
             CREATE TABLE IF NOT EXISTS invite_codes (
                 code TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL,
@@ -3089,7 +3187,11 @@ impl SystemDatabase {
             params![uid, now_str, code],
         )?;
         if affected > 0 {
-            tracing::info!("[INVITE] 邀请码使用成功 code={} uid={}", code, uid);
+            if uid == 0 {
+                tracing::debug!("[INVITE] 邀请码已占位 code={}，等待回填真实 uid", code);
+            } else {
+                tracing::info!("[INVITE] 邀请码使用成功 code={} uid={}", code, uid);
+            }
             return Ok(());
         }
 
@@ -3152,6 +3254,8 @@ impl SystemDatabase {
                 code,
                 uid
             );
+        } else {
+            tracing::info!("[INVITE] 邀请码使用成功 code={} uid={}", code, uid);
         }
         Ok(())
     }

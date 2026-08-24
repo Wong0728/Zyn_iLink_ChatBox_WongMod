@@ -13,15 +13,15 @@
 | `iLinkWM uninstall-service` | 移除系统服务 |
 | `iLinkWM service start/stop/restart/status` | 服务启停与状态（Windows 需管理员） |
 | `iLinkWM update` | 更新到当前正式版本（重新执行安装器，保留数据目录） |
-| `iLinkWM uninstall [--keep-data]` | 卸载；**默认一条命令删除程序与全部数据目录**（有确认提示），`--keep-data` 仅删程序保留 `data/` |
+| `iLinkWM uninstall [--keep-data\|--yes]` | 卸载；**默认一条命令删除程序与全部数据目录**，`--keep-data` 仅删程序保留 `data/`，`--yes` 供无 TTY 自动化免确认 |
 
 安装位置：
 
 | 平台 | 程序目录 | 命令入口（均在 PATH） | 数据目录 |
 |------|----------|----------|----------|
 | Windows | `%LOCALAPPDATA%\Programs\iLinkWM` | `...\iLinkWM\bin\`（`iLinkWM.ps1` + `ilink-wm1.ps1`，自动加入用户 PATH，并把 `.PS1` 追加进用户 PATHEXT） | `...\iLinkWM\data` |
-| Linux / macOS | `~/.local/share/iLinkWM` | `~/.local/bin/`（`iLinkWM` + `ilink-wm1`） | `~/.local/share/iLinkWM/data` |
-| Termux | `$PREFIX/share/iLinkWM` | `$PREFIX/bin/`（`iLinkWM` + `ilink-wm1`） | `$PREFIX/share/iLinkWM/data` |
+| Linux / macOS | `~/.local/share/iLinkWM` | `~/.local/bin/`（`iLinkWM` + `ilinkwm` + `ilink-wm1`） | `~/.local/share/iLinkWM/data` |
+| Termux | `$PREFIX/share/iLinkWM` | `$PREFIX/bin/`（`iLinkWM` + `ilinkwm` + `ilink-wm1`） | `$PREFIX/share/iLinkWM/data` |
 
 > Windows 命令入口为 PowerShell 脚本（**PowerShell 5.1+ / PowerShell 7 均可，cmd.exe 不适用**）。
 > 安装器会在需要时把当前用户执行策略设为 `RemoteSigned` 以放行本地脚本。

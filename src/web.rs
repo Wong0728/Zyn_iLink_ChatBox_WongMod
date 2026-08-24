@@ -3284,6 +3284,23 @@ async fn api_register_status(State(state): State<Arc<AppState>>) -> Json<serde_j
     }))
 }
 
+fn register_error(status: StatusCode, error: impl Into<String>) -> Response {
+    (
+        status,
+        Json(serde_json::json!({"success": false, "error": error.into()})),
+    )
+        .into_response()
+}
+
+fn login_rate_limit_setting(state: &AppState, key: &str, default: u64, min: u64, max: u64) -> u64 {
+    state
+        .system_db
+        .get_setting(key)
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(default)
+        .clamp(min, max)
+}
+
 /// Phase 4: 用户注册
 /// 校验顺序（§5.2）：用户名正则 → 密码强度 → 两次密码一致 → 守则同意 →
 ///   注册模式（开放/邀请码）→ IP 限速 → 写库 → 标邀请码 used → 建 user.db → 签发 session
@@ -3322,11 +3339,10 @@ async fn api_register(
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
-        return Json(serde_json::json!({
-            "success": false,
-            "error": "用户名只能包含字母、数字、下划线、连字符，长度 3-32 位"
-        }))
-        .into_response();
+        return register_error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "用户名只能包含字母、数字、下划线、连字符，长度 3-32 位",
+        );
     }
 
     // 1b. S-NEW 用户名保留字黑名单（防止冒充管理员/系统账号）
@@ -3374,20 +3390,15 @@ async fn api_register(
     ];
     let username_lower = username.to_lowercase();
     if RESERVED_USERNAMES.contains(&username_lower.as_str()) {
-        return Json(serde_json::json!({
-            "success": false,
-            "error": "该用户名为系统保留名，请更换"
-        }))
-        .into_response();
+        return register_error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "该用户名为系统保留名，请更换",
+        );
     }
 
     // 2. 密码强度（复用 auth.rs check_password_strength）
     if let Err(e) = crate::auth::Auth::check_password_strength(&body.password) {
-        return Json(serde_json::json!({
-            "success": false,
-            "error": e
-        }))
-        .into_response();
+        return register_error(StatusCode::UNPROCESSABLE_ENTITY, e);
     }
 
     // 3. 两次密码一致
@@ -3396,20 +3407,12 @@ async fn api_register(
     //   误导用户。现在显式区分：未提供时提示字段缺失，不一致时才提示"两次密码不一致"。
     let confirm = match body.confirm_password.as_deref() {
         None => {
-            return Json(serde_json::json!({
-                "success": false,
-                "error": "请再次输入密码以确认"
-            }))
-            .into_response();
+            return register_error(StatusCode::UNPROCESSABLE_ENTITY, "请再次输入密码以确认");
         }
         Some(c) => c,
     };
     if body.password != confirm {
-        return Json(serde_json::json!({
-            "success": false,
-            "error": "两次输入的密码不一致"
-        }))
-        .into_response();
+        return register_error(StatusCode::UNPROCESSABLE_ENTITY, "两次输入的密码不一致");
     }
 
     // 4. 守则同意版本必须等于当前 terms_version
@@ -3418,11 +3421,7 @@ async fn api_register(
         .get_setting("terms_version")
         .unwrap_or_else(|| "1.0".to_string());
     if body.agreed_terms_ver.as_deref() != Some(terms_version.as_str()) {
-        return Json(serde_json::json!({
-            "success": false,
-            "error": "请阅读并同意使用守则"
-        }))
-        .into_response();
+        return register_error(StatusCode::UNPROCESSABLE_ENTITY, "请阅读并同意使用守则");
     }
 
     // 5. 注册模式校验
@@ -3436,21 +3435,13 @@ async fn api_register(
     let allow_open = truthy("allow_open_registration", false);
     let allow_invite = truthy("allow_invite_registration", true);
     if !allow_open && !allow_invite {
-        return Json(serde_json::json!({
-            "success": false,
-            "error": "注册已关闭，请联系管理员"
-        }))
-        .into_response();
+        return register_error(StatusCode::FORBIDDEN, "注册已关闭，请联系管理员");
     }
     let need_invite = !allow_open; // 关闭开放注册时必须有邀请码
     if need_invite {
         let code = body.invite_code.as_deref().unwrap_or("").trim();
         if code.is_empty() {
-            return Json(serde_json::json!({
-                "success": false,
-                "error": "请输入邀请码"
-            }))
-            .into_response();
+            return register_error(StatusCode::UNPROCESSABLE_ENTITY, "请输入邀请码");
         }
     }
 
@@ -3464,11 +3455,7 @@ async fn api_register(
         let code = body.invite_code.as_deref().unwrap_or("").trim().to_string();
         if let Err(e) = state.system_db.use_invite(&code, 0) {
             tracing::warn!("[register] 邀请码占位失败 code={}: {}", code, e);
-            return Json(serde_json::json!({
-                "success": false,
-                "error": "邀请码无效、已使用或已过期"
-            }))
-            .into_response();
+            return register_error(StatusCode::FORBIDDEN, "邀请码无效、已使用或已过期");
         }
         code
     } else {
@@ -3495,11 +3482,12 @@ async fn api_register(
                     );
                 }
             }
-            return Json(serde_json::json!({
-                "success": false,
-                "error": msg
-            }))
-            .into_response();
+            let status = if msg == "用户名已存在" {
+                StatusCode::CONFLICT
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            return register_error(status, msg);
         }
     };
 
@@ -3549,10 +3537,10 @@ async fn api_register(
                 );
             }
         }
-        return Json(serde_json::json!({
-            "success": false, "error": "用户数据库初始化失败，请稍后重试或联系管理员"
-        }))
-        .into_response();
+        return register_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "用户数据库初始化失败，请稍后重试或联系管理员",
+        );
     }
 
     // 10. 记录守则同意版本；失败同样回滚半成品账户。
@@ -3574,10 +3562,10 @@ async fn api_register(
                 );
             }
         }
-        return Json(serde_json::json!({
-            "success": false, "error": "账号初始化失败，请稍后重试"
-        }))
-        .into_response();
+        return register_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "账号初始化失败，请稍后重试",
+        );
     }
 
     // 11. 签发 session 自动登录
@@ -3602,10 +3590,10 @@ async fn api_register(
                     );
                 }
             }
-            return Json(serde_json::json!({
-                "success": false, "error": "账号创建失败（会话签发异常），请稍后重试"
-            }))
-            .into_response();
+            return register_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "账号创建失败（会话签发异常），请稍后重试",
+            );
         }
     };
 
@@ -3671,6 +3659,14 @@ async fn api_register(
 }
 
 async fn index_admin(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    // /admin 与 /chat 一样由服务端拦截未认证访问，避免只靠前端 JS
+    // 重定向而返回 200。管理员权限与 IP 策略仍由后续 /api/admin/* 守卫执行。
+    let session = extract_session_token(&headers)
+        .and_then(|token| state.auth.verify_session(&token).map(|user| (token, user)));
+    let Some((token, _)) = session else {
+        return (StatusCode::FOUND, [(header::LOCATION, "/auth")], Html("")).into_response();
+    };
+    state.auth.renew_session(&token);
     let web_dir = state.web_dir.clone();
     let admin_path = web_dir.join("admin.html");
     let html = match std::fs::read_to_string(&admin_path) {
@@ -3681,15 +3677,7 @@ async fn index_admin(State(state): State<Arc<AppState>>, headers: HeaderMap) -> 
     //   仅校验 cookie 中的 session 有效并续期；token 通过 HttpOnly Cookie 传递，
     //   前端 fetch/XHR/WS 同源自动携带 cookie，无需 JS 可读 token。
     //   未认证则不强制重定向（admin 页有自己的登录入口），但 token 留空触发前端跳转。
-    let authed = match extract_session_token(&headers) {
-        Some(tok) if state.auth.verify_session(&tok).is_some() => {
-            state.auth.renew_session(&tok);
-            true
-        }
-        _ => false,
-    };
-    let auth_required = if authed { "true" } else { "false" };
-    let html = html.replace("{{AUTH_REQUIRED}}", auth_required);
+    let html = html.replace("{{AUTH_REQUIRED}}", "true");
     (
         StatusCode::OK,
         [
@@ -3750,8 +3738,28 @@ async fn favicon() -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-async fn healthz() -> Json<serde_json::Value> {
-    Json(serde_json::json!({"status": "ok"}))
+async fn healthz(State(state): State<Arc<AppState>>) -> Response {
+    let db_ok = state.system_db.health_check();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64();
+    let payload = serde_json::json!({
+        "status": if db_ok { "ok" } else { "degraded" },
+        "version": crate::config::SCRIPT_VERSION,
+        "uptime_secs": (now - state.boot_time).max(0.0).floor() as u64,
+        "db_status": if db_ok { "ok" } else { "error" },
+        "active_bots": state.bot.list_loaded_uids().len(),
+    });
+    (
+        if db_ok {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        },
+        Json(payload),
+    )
+        .into_response()
 }
 
 async fn auth_status(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
@@ -3819,9 +3827,16 @@ async fn api_login(
     // 限速检查前移到密码校验之前（防暴力破解更高效）。
     //   原实现先校验密码再限速，前 3 次失败不计入限速，存在低频暴力破解窗口。
     //   现在按 IP 维度先检查限速，超限直接 429，不再消耗 PBKDF2 计算资源。
-    //   Q-1 已确认：限速策略保持 300s/3次。
+    // 默认 3 次/300 秒；管理员可通过 system_settings 动态调整，
+    // 记录持久化于 system.db，CLI 清除可立即作用于运行中服务。
     let rl_key = format!("{}|login", client_ip.0);
-    if state.bot.check_rate_limit(&rl_key, 3, 300.0) {
+    let ip_max = login_rate_limit_setting(&state, "login_ip_rate_limit_max", 3, 1, 100) as usize;
+    let ip_window =
+        login_rate_limit_setting(&state, "login_ip_rate_limit_window_secs", 300, 30, 86_400);
+    if state
+        .system_db
+        .check_login_rate_limit(&rl_key, ip_max, ip_window)
+    {
         return Ok(rate_limited_response("login"));
     }
     // 叠加账号维度限流，防止攻击者用代理池对同一账号无限尝试。
@@ -3830,7 +3845,14 @@ async fn api_login(
     //   使用 is_rate_limited 仅检查不增加计数——避免"检查锁定状态"本身消耗一次失败额度。
     //   锁定提示与"用户名或密码错误"一致，避免泄露账号是否锁定（侧信道）。
     let user_rl_key = format!("user|{}|login_fail", username);
-    if state.bot.is_rate_limited(&user_rl_key, 5, 900.0) {
+    let user_max =
+        login_rate_limit_setting(&state, "login_user_rate_limit_max", 5, 1, 100) as usize;
+    let user_window =
+        login_rate_limit_setting(&state, "login_user_rate_limit_window_secs", 900, 30, 86_400);
+    if state
+        .system_db
+        .is_login_rate_limited(&user_rl_key, user_max, user_window)
+    {
         // 账号锁定事件记审计日志，供运维审查暴力破解尝试。
         audit_log(
             &state.system_db,
@@ -3867,7 +3889,9 @@ async fn api_login(
             // 登录失败时增加账号维度计数（与 IP 维度并行）。
             //   check_rate_limit 已超限返回 true 不再增加计数，避免计数无限增长。
             //   阈值 5 次/900s：第 5 次失败后账号锁定 15 分钟。
-            let _ = state.bot.check_rate_limit(&user_rl_key, 5, 900.0);
+            let _ = state
+                .system_db
+                .check_login_rate_limit(&user_rl_key, user_max, user_window);
             // 所有登录失败路径统一返回"用户名或密码错误"，
             //   不再返回"账号已禁用"差异化错误。原实现允许攻击者通过响应差异
             //   确认用户名是否存在 + 该账号是否被禁用，构成侧信道。
@@ -3914,11 +3938,11 @@ async fn api_login(
     }
 
     // 登录成功：清除该 IP 的登录限速记录 + 账号维度失败计数
-    state
-        .bot
-        .clear_rate_limit(&format!("{}|login", client_ip.0));
+    let _ = state
+        .system_db
+        .clear_login_rate_limit(&format!("{}|login", client_ip.0));
     // 清除账号维度失败计数——成功登录后重置锁定窗口。
-    state.bot.clear_rate_limit(&user_rl_key);
+    let _ = state.system_db.clear_login_rate_limit(&user_rl_key);
 
     // 防止 session 固定攻击：登录/注册成功、自动登录后签发新 session token。
     //   登录成功时一律颁发新 token，作废旧 token（DB + 内存），
